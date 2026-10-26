@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Précis — Faithful Text Summarizer</title>
+<meta name="description" content="Summarize PDFs, Word files, e-books and more to any length you choose, keeping the author's voice, style and every important detail. Export to PDF, Word, Markdown and HTML.">
+<meta name="theme-color" content="#f6f2ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15130f" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="Précis — Faithful Text Summarizer">
+<meta property="og:description" content="Summaries that keep the author's voice. Upload any document, pick a length, download as PDF or Word.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+<script>
+  // Apply the saved theme before first paint to avoid a flash.
+  try { const t = localStorage.getItem('precis.theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<a class="skip" href="#source-text">Skip to the text box</a>
+
+<header class="topbar">
+  <a class="brand" href="./" aria-label="Précis home">
+    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="4" width="26" height="24" rx="5" fill="currentColor" opacity=".14"/><path d="M9 11h14M9 16h10M9 21h6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+    <span class="brand-name">Précis</span>
+    <span class="brand-tag">summaries that keep the author's voice</span>
+  </a>
+  <nav class="top-actions">
+    <button class="ghost" id="btn-history" type="button" title="Your past summaries">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3 2"/></svg><span>History</span>
+    </button>
+    <button class="ghost" id="btn-settings" type="button" title="AI engine, API key and advanced options">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span>Settings</span>
+    </button>
+    <button class="ghost icon-only" id="btn-theme" type="button" title="Switch light / dark theme" aria-label="Switch light or dark theme">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+    </button>
+    <button class="ghost icon-only" id="btn-help" type="button" title="How it works" aria-label="How it works">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5h.01"/></svg>
+    </button>
+  </nav>
+</header>
+
+<main class="workspace">
+  <section class="col col-input" aria-label="Source and options">
+    <div class="card" id="source-card">
+      <div class="card-head">
+        <h2><span class="step">1</span> Your text</h2>
+        <div class="head-actions">
+          <button class="link" id="btn-sample" type="button">Try a sample</button>
+          <button class="link" id="btn-clear" type="button">Clear</button>
+        </div>
+      </div>
+
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="file-input" multiple hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        <span class="dz-main"><strong>Drop files here</strong> or <u>browse</u></span>
+        <span class="dz-sub">PDF · Word · EPUB · PowerPoint · ODT · RTF · HTML · TXT/MD · subtitles · images (OCR)</span>
+      </label>
+
+      <ul class="file-list" id="file-list" aria-live="polite"></ul>
+
+      <div class="inline-panel" id="pdf-range" hidden>
+        <span>Pages</span>
+        <input type="number" id="page-from" min="1" value="1" aria-label="First page">
+        <span>to</span>
+        <input type="number" id="page-to" min="1" value="1" aria-label="Last page">
+        <span class="muted" id="page-total"></span>
+        <button class="small" id="btn-apply-range" type="button">Apply</button>
+      </div>
+
+      <div class="inline-panel warn" id="ocr-notice" hidden>
+        <span>This PDF looks scanned (pictures of pages, no selectable text).</span>
+        <select id="ocr-lang-pdf" aria-label="Language of the scanned text"></select>
+        <button class="small" id="btn-run-ocr" type="button">Recognise text (OCR)</button>
+      </div>
+
+      <div class="progress-line" id="extract-progress" hidden>
+        <div class="bar"><span></span></div>
+        <span class="msg"></span>
+      </div>
+
+      <div class="field title-field">
+        <label for="doc-title">Title</label>
+        <input id="doc-title" type="text" placeholder="Used in the summary and file names" autocomplete="off">
+      </div>
+      <textarea id="source-text" spellcheck="false" placeholder="…or paste / type your text here. You can also edit text extracted from files before summarizing."></textarea>
+      <div class="source-stats" id="source-stats">No text yet</div>
+    </div>
+
+    <div class="card" id="options-card">
+      <div class="card-head">
+        <h2><span class="step">2</span> How to summarize</h2>
+      </div>
+
+      <div class="length-control">
+        <div class="length-top">
+          <label for="ratio">Summary length</label>
+          <output id="ratio-out" for="ratio">25%</output>
+        </div>
+        <input type="range" id="ratio" min="1" max="90" step="1" value="25" aria-describedby="length-info">
+        <div class="presets" role="group" aria-label="Length presets">
+          <button type="button" data-ratio="5">5% <small>gist</small></button>
+          <button type="button" data-ratio="10">10% <small>brief</small></button>
+          <button type="button" data-ratio="25">25% <small>standard</small></button>
+          <button type="button" data-ratio="50">50% <small>detailed</small></button>
+          <button type="button" data-ratio="75">75% <small>light trim</small></button>
+        </div>
+        <div class="length-info" id="length-info">
+          About <input type="number" id="target-words" min="10" step="10" aria-label="Target word count"> words
+          <span id="length-detail"></span>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="field">
+          <label for="format">Format</label>
+          <select id="format"></select>
+          <small class="hint" id="format-hint"></small>
+        </div>
+        <div class="field">
+          <label for="tone">Tone</label>
+          <select id="tone"></select>
+        </div>
+        <div class="field">
+          <label for="language">Output language</label>
+          <select id="language"></select>
+        </div>
+        <div class="field">
+          <label for="mature">Mature &amp; sensitive content</label>
+          <select id="mature">
+            <option value="direct">Keep it, as direct as the original</option>
+            <option value="clinical">Keep it, in neutral wording</option>
+          </select>
+        </div>
+      </div>
+
+      <fieldset class="extras">
+        <legend>Add sections</legend>
+        <div class="chips" id="extras"></div>
+      </fieldset>
+
+      <label class="check"><input type="checkbox" id="quotes" checked> Keep important quotes word-for-word</label>
+
+      <details class="custom">
+        <summary>Custom instructions <span class="muted">(optional)</span></summary>
+        <textarea id="custom" rows="3" placeholder="e.g. Focus on the financial figures · Keep all character names in their original spelling · Explain technical terms"></textarea>
+      </details>
+
+      <div class="engine-row">
+        <label for="engine">Engine</label>
+        <select id="engine">
+          <option value="anthropic">Claude AI (best quality)</option>
+          <option value="openai">Other AI / local model</option>
+          <option value="offline">Offline (no AI, free)</option>
+        </select>
+        <span class="engine-meta" id="engine-meta"></span>
+      </div>
+
+      <button class="primary big" id="btn-run" type="button">
+        <span class="label">Summarize</span>
+        <kbd>Ctrl ↵</kbd>
+      </button>
+    </div>
+    <p class="site-note">🔒 Your files are read inside your browser. Text is only sent to the AI service you choose, with your own key. <a href="https://github.com/" id="repo-link" target="_blank" rel="noopener">Source code</a></p>
+  </section>
+
+  <section class="col col-output" aria-label="Summary">
+    <div class="card output-card">
+      <div class="card-head output-head">
+        <h2><span class="step">3</span> Summary</h2>
+        <div class="toolbar" id="toolbar">
+          <div class="menu">
+            <button class="tool" id="btn-copy" type="button" aria-haspopup="true" aria-expanded="false" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><span>Copy</span>
+            </button>
+            <div class="menu-list" role="menu" hidden>
+              <button role="menuitem" data-copy="rich" type="button">Formatted text <small>for Word, Docs, email</small></button>
+              <button role="menuitem" data-copy="md" type="button">Markdown</button>
+              <button role="menuitem" data-copy="plain" type="button">Plain text</button>
+            </div>
+          </div>
+          <div class="menu">
+            <button class="tool accent" id="btn-download" type="button" aria-haspopup="true" aria-expanded="false" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></svg><span>Download</span>
+            </button>
+            <div class="menu-list" role="menu" hidden>
+              <button role="menuitem" data-dl="pdf" type="button">PDF document <small>.pdf</small></button>
+              <button role="menuitem" data-dl="docx" type="button">Word document <small>.docx</small></button>
+              <button role="menuitem" data-dl="md" type="button">Markdown <small>.md</small></button>
+              <button role="menuitem" data-dl="html" type="button">Web page <small>.html</small></button>
+              <button role="menuitem" data-dl="txt" type="button">Plain text <small>.txt</small></button>
+            </div>
+          </div>
+          <button class="tool" id="btn-print" type="button" title="Print or save as PDF" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M7 14h10v7H7z"/></svg><span>Print</span>
+          </button>
+          <button class="tool" id="btn-speak" type="button" title="Read the summary aloud" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4.5 3.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/></svg><span>Listen</span>
+          </button>
+          <button class="tool" id="btn-edit" type="button" title="Edit the summary text" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Zm10-14 4 4"/></svg><span>Edit</span>
+          </button>
+          <button class="tool" id="btn-regen" type="button" title="Write it again with the current options" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg><span>Redo</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="status" id="status" hidden>
+        <div class="status-row">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="status-msg" id="status-msg" role="status">Working…</span>
+          <button class="small danger" id="btn-stop" type="button">Stop</button>
+        </div>
+        <div class="bar" id="status-bar"><span></span></div>
+      </div>
+
+      <div class="notice" id="notice" hidden role="alert"></div>
+
+      <div class="output-scroll" id="output-scroll">
+        <article class="output prose" id="output" dir="auto" aria-live="off">
+          <div class="empty">
+            <svg viewBox="0 0 120 90" aria-hidden="true"><rect x="8" y="6" width="58" height="78" rx="6" class="e1"/><path d="M18 22h38M18 32h38M18 42h38M18 52h30M18 62h34M18 72h22" class="e2"/><rect x="74" y="26" width="38" height="44" rx="6" class="e3"/><path d="M82 40h22M82 49h22M82 58h14" class="e4"/><path d="M66 46h6" class="e5"/></svg>
+            <h3>Your summary will appear here</h3>
+            <ol>
+              <li>Upload a document or paste text <span class="muted">(or try the sample)</span></li>
+              <li>Pick a length with the slider: 25% means a quarter of the original</li>
+              <li>Press <b>Summarize</b>, then copy it or download it as PDF, Word and more</li>
+            </ol>
+          </div>
+        </article>
+        <textarea class="output-editor" id="output-editor" hidden aria-label="Edit summary (Markdown)"></textarea>
+      </div>
+
+      <footer class="output-stats" id="output-stats" hidden></footer>
+    </div>
+  </section>
+</main>
+
+
+<!-- History drawer -->
+<aside class="drawer" id="history-drawer" aria-label="History" hidden>
+  <div class="drawer-head">
+    <h2>History</h2>
+    <div>
+      <button class="link danger" id="btn-clear-history" type="button">Clear all</button>
+      <button class="ghost icon-only" id="btn-close-history" type="button" aria-label="Close history">✕</button>
+    </div>
+  </div>
+  <p class="muted small-note">Saved only in this browser.</p>
+  <ul class="history-list" id="history-list"></ul>
+</aside>
+<div class="scrim" id="scrim" hidden></div>
+
+<!-- Settings -->
+<dialog id="settings-dialog" aria-labelledby="settings-title">
+  <form method="dialog" class="dialog-body" id="settings-form">
+    <div class="dialog-head">
+      <h2 id="settings-title">Settings</h2>
+      <button class="ghost icon-only" value="cancel" aria-label="Close settings">✕</button>
+    </div>
+
+    <div class="engine-cards" role="radiogroup" aria-label="Summarizing engine">
+      <label class="engine-card"><input type="radio" name="provider" value="anthropic">
+        <strong>Claude AI</strong><span>Professional-quality summaries that keep the author's voice. Uses your Anthropic API key.</span></label>
+      <label class="engine-card"><input type="radio" name="provider" value="openai">
+        <strong>Other AI / local</strong><span>OpenAI, OpenRouter, or a model on your own computer (Ollama, LM Studio).</span></label>
+      <label class="engine-card"><input type="radio" name="provider" value="offline">
+        <strong>Offline</strong><span>No AI and no key. Picks the most important original sentences. Free and private.</span></label>
+    </div>
+
+    <section class="settings-section" data-provider="anthropic">
+      <div class="field">
+        <label for="anthropic-key">Anthropic API key</label>
+        <div class="key-row">
+          <input id="anthropic-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+          <button type="button" class="small" data-toggle-key="anthropic-key">Show</button>
+        </div>
+        <small class="hint">Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (you pay Anthropic directly for what you use).</small>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="anthropic-model">Model</label>
+          <select id="anthropic-model"></select>
+          <input id="anthropic-model-custom" type="text" placeholder="Model ID, e.g. claude-opus-5-5" hidden>
+          <small class="hint" id="model-price"></small>
+        </div>
+        <div class="field">
+          <label for="anthropic-effort">Thinking effort</label>
+          <select id="anthropic-effort">
+            <option value="low">Low: fastest</option>
+            <option value="medium">Medium: balanced</option>
+            <option value="high">High: careful (recommended)</option>
+            <option value="xhigh">Extra high</option>
+            <option value="max">Maximum: slowest</option>
+          </select>
+        </div>
+      </div>
+      <button type="button" class="small" id="btn-test-anthropic">Test key</button>
+      <span class="test-result" id="test-anthropic-result"></span>
+    </section>
+
+    <section class="settings-section" data-provider="openai">
+      <div class="grid2">
+        <div class="field">
+          <label for="openai-preset">Service</label>
+          <select id="openai-preset"></select>
+        </div>
+        <div class="field">
+          <label for="openai-model">Model name</label>
+          <input id="openai-model" type="text" spellcheck="false" placeholder="e.g. gpt-5.1, meta-llama/llama-3.3-70b-instruct, llama3.1">
+        </div>
+      </div>
+      <div class="field">
+        <label for="openai-base">Endpoint URL</label>
+        <input id="openai-base" type="url" spellcheck="false" placeholder="https://…/v1">
+      </div>
+      <div class="field">
+        <label for="openai-key">API key <span class="muted">(not needed for local models)</span></label>
+        <div class="key-row">
+          <input id="openai-key" type="password" autocomplete="off" spellcheck="false">
+          <button type="button" class="small" data-toggle-key="openai-key">Show</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="openai-context">Context window (tokens)</label>
+          <input id="openai-context" type="number" min="2048" step="1024">
+          <small class="hint">How much text the model can read at once. Long documents are split to fit.</small>
+        </div>
+        <div class="field">
+          <label for="openai-maxout">Max output tokens</label>
+          <input id="openai-maxout" type="number" min="256" step="256">
+        </div>
+      </div>
+      <p class="hint" id="openai-note"></p>
+    </section>
+
+    <section class="settings-section" data-provider="offline">
+      <p class="hint">Offline mode ranks every sentence by how central it is to the text (the TextRank method) and keeps the best ones, section by section, in their original order. It is instant, free and never leaves your device, but it can't rephrase, so it reads less smoothly than AI summaries.</p>
+    </section>
+
+    <label class="check"><input type="checkbox" id="remember-key"> Remember API keys on this device</label>
+
+    <details class="advanced">
+      <summary>Advanced</summary>
+      <div class="grid2">
+        <div class="field">
+          <label for="adv-chunk">Max tokens read per request</label>
+          <input id="adv-chunk" type="number" min="1000" step="1000">
+          <small class="hint">Bigger documents are read in parts of this size (Claude can read ~150,000 tokens ≈ a full novel at once).</small>
+        </div>
+        <div class="field">
+          <label for="adv-partwords">Max words written per request</label>
+          <input id="adv-partwords" type="number" min="200" step="100">
+          <small class="hint">Long summaries are written in parts no longer than this, so quality stays high.</small>
+        </div>
+        <div class="field">
+          <label for="ocr-lang">Text recognition (OCR) language</label>
+          <select id="ocr-lang"></select>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="adv-autolength"> Automatically correct the length if the summary misses the target by more than 25%</label>
+    </details>
+
+    <p class="privacy">🔒 Keys are stored only in this browser and sent only to the service you picked. Documents are processed locally; only their text goes to the AI service.</p>
+
+    <div class="dialog-actions">
+      <button class="secondary" value="cancel" type="submit">Cancel</button>
+      <button class="primary" value="save" type="submit" id="btn-save-settings">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Help -->
+<dialog id="help-dialog" aria-labelledby="help-title">
+  <div class="dialog-body prose-ui">
+    <div class="dialog-head">
+      <h2 id="help-title">How Précis works</h2>
+      <form method="dialog"><button class="ghost icon-only" aria-label="Close help">✕</button></form>
+    </div>
+    <p>A <em>précis</em> (say “pray-see”) is a summary that keeps the original's voice. Think of Précis as a skilled editor making an <b>abridged edition</b>: the book gets shorter, but it's still the same book, with the same characters, arguments, tone and even its uncomfortable parts.</p>
+    <h3>The length slider</h3>
+    <p>The percentage is how long the summary is compared with the original. A 20,000-word text at <b>25%</b> becomes about 5,000 words. Low percentages keep the skeleton (every major event and argument); higher ones put back the muscle and texture (details, examples, dialogue, quotes).</p>
+    <h3>Long documents</h3>
+    <p>Very long texts are handled like a careful reader with a notebook: Précis reads them in parts and condenses each part to the same percentage, while remembering what it has already written so the result flows as one piece. For very short summaries of huge books, it first takes detailed notes on each part, then writes the final summary from all the notes.</p>
+    <h3>Nothing left out</h3>
+    <p>The AI is instructed to keep everything that is in your text, including mature, explicit, violent or controversial material, in proportion and in the original's own words and tone, without warnings or moralizing. Choose “neutral wording” if you want such passages kept but described plainly.</p>
+    <h3>Engines</h3>
+    <ul>
+      <li><b>Claude AI</b> (recommended): best quality. Needs an Anthropic API key; a typical article costs well under one cent with Haiku and a few cents with Opus.</li>
+      <li><b>Other AI / local</b>: any OpenAI-compatible service, or a model running on your own computer for complete privacy.</li>
+      <li><b>Offline</b>: free, instant, private; picks the author's most important sentences.</li>
+    </ul>
+    <h3>Tips</h3>
+    <ul>
+      <li>You can edit the extracted text before summarizing, for example to remove an index or bibliography.</li>
+      <li>For a PDF, choose a page range to summarize just one chapter.</li>
+      <li>Use <b>Custom instructions</b> to focus on something specific.</li>
+      <li>Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to summarize. Every result is saved in <b>History</b> on this device.</li>
+    </ul>
+    <h3>Privacy</h3>
+    <p>Files are opened inside your browser. Nothing is uploaded to this website. When you summarize, the text is sent straight from your browser to the AI service you chose. Offline mode sends nothing at all.</p>
+  </div>
+</dialog>
+
+<div class="drop-overlay" id="drop-overlay" hidden><div>Drop to add your files</div></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
