@@ -260,7 +260,7 @@
 
 <!-- Settings -->
 <dialog id="settings-dialog" aria-labelledby="settings-title">
-  <form method="dialog" class="dialog-body" id="settings-form">
+  <form method="dialog" class="dialog-body" id="settings-form" novalidate>
     <div class="dialog-head">
       <h2 id="settings-title">Settings</h2>
       <button class="ghost icon-only" value="cancel" aria-label="Close settings">✕</button>
@@ -331,12 +331,12 @@
       <div class="grid2">
         <div class="field">
           <label for="openai-context">Context window (tokens)</label>
-          <input id="openai-context" type="number" min="2048" step="1024">
+          <input id="openai-context" type="number" min="2048" step="any">
           <small class="hint">How much text the model can read at once. Long documents are split to fit.</small>
         </div>
         <div class="field">
           <label for="openai-maxout">Max output tokens</label>
-          <input id="openai-maxout" type="number" min="256" step="256">
+          <input id="openai-maxout" type="number" min="256" step="any">
         </div>
       </div>
       <p class="hint" id="openai-note"></p>
@@ -353,12 +353,12 @@
       <div class="grid2">
         <div class="field">
           <label for="adv-chunk">Max tokens read per request</label>
-          <input id="adv-chunk" type="number" min="1000" step="1000">
+          <input id="adv-chunk" type="number" min="1000" step="any">
           <small class="hint">Bigger documents are read in parts of this size (Claude can read ~150,000 tokens ≈ a full novel at once).</small>
         </div>
         <div class="field">
           <label for="adv-partwords">Max words written per request</label>
-          <input id="adv-partwords" type="number" min="200" step="100">
+          <input id="adv-partwords" type="number" min="200" step="any">
           <small class="hint">Long summaries are written in parts no longer than this, so quality stays high.</small>
         </div>
         <div class="field">

@@ -767,8 +767,8 @@ function readSettingsForm() {
   s.openai.baseUrl = $('#openai-base').value.trim();
   s.openai.apiKey = $('#openai-key').value.trim();
   s.openai.model = $('#openai-model').value.trim();
-  s.openai.contextTokens = Number($('#openai-context').value) || 8192;
-  s.openai.maxOutputTokens = Number($('#openai-maxout').value) || 4096;
+  s.openai.contextTokens = Math.max(2048, Math.round(Number($('#openai-context').value)) || 8192);
+  s.openai.maxOutputTokens = Math.max(256, Math.round(Number($('#openai-maxout').value)) || 4096);
   s.rememberKey = $('#remember-key').checked;
   s.advanced.chunkTokens = Math.max(1000, Number($('#adv-chunk').value) || 150000);
   s.advanced.partWords = Math.max(200, Number($('#adv-partwords').value) || 3500);
