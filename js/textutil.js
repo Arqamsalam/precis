@@ -64,9 +64,12 @@ export function looksLikeHeading(paragraph) {
   if (p.length > 120 || p.includes('\n')) return false;
   if (/^#{1,6}\s/.test(p)) return true;
   if (/^(chapter|part|book|section|act|scene|prologue|epilogue|introduction|conclusion|appendix)\b/i.test(p)) return true;
-  if (/^(\d+|[IVXLC]+)[.)]?\s+\S/.test(p) && p.split(/\s+/).length <= 12 && !/[.!?]$/.test(p)) return true;
+  // "3. Results", "IV) Methods", "2 Background". A bare "I" is the pronoun, so Roman numerals need a "." or ")".
+  if ((/^(\d+(\.\d+)*|[IVXLC]+)[.):]\s+\S/.test(p) || /^\d+(\.\d+)*\s+\p{Lu}/u.test(p)) &&
+    p.split(/\s+/).length <= 12 && !/[.!?,;]["”’']?$/.test(p)) return true;
   const letters = p.replace(/[^\p{L}]/gu, '');
-  return letters.length >= 4 && letters === letters.toUpperCase() && letters !== letters.toLowerCase() && p.split(/\s+/).length <= 10;
+  // ALL-CAPS lines are headings, unless they end like a sentence ("CHORUS." in a poem is not a heading).
+  return letters.length >= 4 && letters === letters.toUpperCase() && letters !== letters.toLowerCase() && p.split(/\s+/).length <= 10 && !/[.!?,;:]$/.test(p);
 }
 
 // Convert an HTML document/element into readable text, keeping headings, lists and paragraphs.

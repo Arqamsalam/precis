@@ -1,94 +1,78 @@
-# Précis: faithful text summarizer
+# Précis: free, private, offline summarizer
 
-**Précis** (say *“pray-see”*) turns long documents into summaries of exactly the length you choose, while keeping the author's voice, tone and every important detail.
+**Précis** (say *“pray-see”*) shortens long documents to exactly the length you choose, **entirely inside your browser**. No account, no API key, no cost, and your text never leaves your device.
 
-Think of it as a skilled editor making an **abridged edition** of a book: the book gets shorter, but it's still the same book, with the same characters, arguments, style and even its uncomfortable parts. Nothing is censored or watered down.
+Think of a careful reader with a highlighter and a pair of scissors: they read every sentence, work out which ones carry the story or argument, and cut away the rest, keeping **the author's own words**. Nothing is reworded, softened or censored.
 
-🌐 **Use it online:** `https://arqamsalam.github.io/precis/` (live once GitHub Pages is switched on, see [Publishing](#publishing-on-github-pages))
+🌐 **Use it:** https://arqamsalam.github.io/precis/
 
 ---
 
-## What it can do
+## Features
 
 | | |
 |---|---|
-| 📄 **Reads almost any file** | PDF (with page ranges), Word `.docx`, EPUB e-books, PowerPoint `.pptx`, OpenDocument `.odt`, RTF, HTML, Markdown/TXT, CSV/JSON, subtitles `.srt`/`.vtt`, and **images or scanned PDFs via OCR** (text recognition in 24 languages). Several files at once, drag-and-drop or paste. |
-| 🎚️ **Length slider** | 1% to 90% of the original, with presets (gist, brief, standard, detailed, light trim) or an exact word count. |
-| ✍️ **Keeps the style** | Fiction stays a story, a legal text stays precise, a casual post stays casual. Key quotes are kept word-for-word. |
-| 🚫 **No censorship** | Mature, explicit, violent or controversial content is kept in proportion and with the original's directness, with no warnings or moralizing. Optionally keep it in neutral wording instead. |
-| 🧭 **7 formats** | Original style · narrative overview · bullet points · executive brief · chapter by chapter · study notes · TL;DR. |
-| 🎨 **6 tones, 25 languages** | Match the original, formal, plain and simple, academic, conversational, vivid. Summarize into Urdu, Arabic, English, Spanish, Chinese and more (right-to-left scripts supported). |
-| ➕ **Extra sections** | Key takeaways, people & characters, notable quotes, glossary, timeline. |
-| 📚 **Any length of document** | Whole novels and long reports are handled automatically (see [How it works](#how-it-works)). |
+| 📄 **Reads almost any file** | PDF (with page ranges), Word `.docx`, EPUB e-books, PowerPoint `.pptx`, OpenDocument `.odt`, RTF, HTML, Markdown/TXT, CSV/JSON, subtitles `.srt`/`.vtt`, and **images or scanned PDFs** via text recognition (OCR) in 24 languages. Drag and drop, browse, or paste. |
+| 🎚️ **Any length** | A slider from 1% to 90%, presets, or an exact word count. Results land within about 1% of the target. |
+| ⚡ **Instant, live updates** | After the first summary, move the slider or change an option and the summary updates immediately. A whole novel takes about a second. |
+| 🧵 **Reads smoothly** | Keeps a sentence together with the one it depends on, drops stray connectors (“However,”, “Second,”) when their partner was cut, finishes list fragments properly, never splits quoted dialogue, and skips near-duplicate sentences. Optional: trim (asides) and citations, mark cuts with […]. |
+| ⚖️ **Balanced coverage** | Every part of the text gets its fair share, so the ending is covered as well as the beginning. A coverage bar shows where the chosen sentences come from. |
+| 🎯 **Focus** | Type words or names to prioritise (e.g. “budget, Elias”). |
+| 🔍 **In context** | See the chosen sentences highlighted inside the full original. |
+| 🧾 **Layouts and extras** | Flowing paragraphs, bullet points, or section by section. Add key takeaways, keywords, names mentioned, notable quotes (with speakers), key figures and a timeline. |
+| 🔊 **Listen** | Read aloud with a choice of voices, speed and pitch; the current paragraph is highlighted. In **Microsoft Edge** this includes Microsoft's free natural voices (Andrew, Ava, Emma, Brian and many more, including Urdu). |
 | 💾 **Exports** | PDF, Word `.docx`, Markdown, HTML web page, plain text; copy as formatted text; print. |
-| 🔊 **Extras** | Read aloud, edit the summary, history of past summaries, light/dark theme, cost estimate before you run. |
+| 🗂️ **History, themes, mobile** | Past summaries saved in your browser, light/dark theme, works on phones. |
 
-## Three engines
+## How it chooses sentences
 
-1. **Claude AI** (recommended, best quality): uses your own [Anthropic API key](https://console.anthropic.com/settings/keys). Choose Opus 5.5 (best), Sonnet 5.5 (faster, half price), Haiku 5.5 (cheapest) or Fable 5.1 (most capable). A typical article costs a few cents with Opus and a fraction of a cent with Haiku.
-2. **Other AI / local model**: any OpenAI-compatible service (OpenAI, OpenRouter's hundreds of models) or a model running on **your own computer** with Ollama or LM Studio, for complete privacy.
-3. **Offline**: no AI, no key, free. Ranks every sentence by how central it is (the *TextRank* method) and keeps the most important ones in their original order.
+1. **Centrality (TextRank).** Every sentence “votes” for the sentences it shares important words with, much like web pages linking to each other. The sentences that many others point to are the backbone of the text.
+2. **Key terms.** Words that are frequent in this text but rare overall (names, topics) make a sentence more valuable, both for the whole document and within its own chapter.
+3. **Position and signals.** Opening sentences of paragraphs and phrases such as “in conclusion” or “the main reason” get a boost; examples (“for instance…”) get less.
+4. **Fair shares.** The text is walked through in stretches, and each stretch spends its share of the word budget on its best sentences, skipping repeats and keeping dependent pairs together.
+5. **Polish.** Connectors and list endings are tidied, paragraphs are rebuilt, and chapter headings are kept.
 
-## How it works
+Because it only selects sentences, the summary can't misquote the author, add anything, or leave out sensitive material because of what it says. The trade-off: it can't rephrase. Very short summaries of novels (under ~5%) can feel like a sequence of key moments rather than a retelling.
 
-**1. Reading the file.** Everything happens inside your browser, like opening a document in a desktop app. Nothing is uploaded to this website. PDFs are rebuilt into proper paragraphs, with repeated page headers and page numbers stripped out.
+## Listening with natural voices
 
-**2. Choosing the length.** The slider sets a word budget: 25% of a 20,000-word text is about 5,000 words. Think of a short percentage as the *skeleton* (every major event and argument) and a higher one as putting back the *muscle* (examples, dialogue, texture).
+Précis uses the voices built into your browser:
 
-**3. Writing the summary.** The AI is briefed like a professional editor: cover the whole text evenly, give each part space in proportion to its weight, keep the author's voice, add nothing that isn't there, and leave nothing out because it is sensitive.
+- **Microsoft Edge** (Windows, Mac, Android, iOS) offers Microsoft's free natural voices such as *Andrew*, *Ava*, *Emma*, *Brian* and *Jenny*, plus natural voices in dozens of other languages, including Urdu (*Uzma*, *Asad*). They appear first in the voice list, marked with ★.
+- **Chrome** offers Google voices; **Safari** offers Apple voices (you can download better “Enhanced”/“Premium” ones in your system's settings).
 
-**4. Long documents.** A very long book is handled the way a careful reader with a notebook would:
-
-- **Long summaries** (say 25% of a novel) are written *part by part*. Each part is condensed to the same percentage while the AI sees the end of what it has already written, so the parts join into one smooth text without repeating introductions.
-- **Short summaries of huge texts** (say 2% of a 500-page book) use *notes first*: dense notes are taken on each part, then the final summary is written from all the notes together.
-
-**5. Hitting the target.** If a summary misses the requested length by more than 25%, Précis asks the AI for one revision at the right length. The original stays in the AI's memory (cached), so this is cheap.
+Online voices (like Edge's natural voices) are spoken by the browser maker's service, so the browser sends the text being read to that service. Voices marked “on this device” are fully private.
 
 ## Privacy
 
-- Files are opened in your browser. This site has no server and stores nothing.
-- When you summarize, the text goes **directly from your browser to the AI service you chose**, using your own key.
-- API keys and history are kept in your browser's local storage. Untick *Remember API keys* to keep a key only for the current tab.
-- Offline mode and local models (Ollama/LM Studio) never send your text over the internet.
+- Files are opened and summarized inside your browser. This site has no server and stores nothing.
+- History and settings are kept in your browser's local storage.
+- The only things downloaded are the page itself and, the first time you read a scanned page or image, the open-source text-recognition engine.
 
-## Using a local model (Ollama)
+## Running it yourself
 
-```bash
-# 1. Install Ollama from https://ollama.com, then download a model:
-ollama pull llama3.1
-# 2. Start it so it accepts requests from the web page:
-OLLAMA_ORIGINS="*" ollama serve
-```
+The site is plain HTML, CSS and JavaScript with no build step. To run it on your own computer: `python3 -m http.server` in this folder, then open <http://localhost:8000>.
 
-In **Settings → Other AI / local**, pick *Ollama*, enter the model name and set the context window to what your model supports. Long texts are split to fit automatically.
-
-## Publishing on GitHub Pages
-
-The site is plain HTML, CSS and JavaScript, so there is nothing to build.
-
-1. Open the repository on GitHub → **Settings** → **Pages**.
-2. Under *Build and deployment*, set **Source: Deploy from a branch**, **Branch: `main`**, folder **`/ (root)`**, then **Save**.
-3. After a minute the site is live at `https://<your-username>.github.io/<repository-name>/`.
-
-To run it on your own computer: `python3 -m http.server` in this folder, then open <http://localhost:8000>.
+To publish your own copy on GitHub Pages: **Settings → Pages → Deploy from a branch → `main` / root**.
 
 ## Project layout
 
 ```
-index.html          page structure
-css/styles.css      design (light + dark themes, mobile layout)
-js/app.js           user interface
-js/extract.js       reading files (PDF, Word, EPUB, PPTX, ODT, RTF, OCR, …)
-js/ai.js            AI engine: Claude via the official SDK, OpenAI-compatible APIs, long-document planning
-js/prompts.js       the editor's instructions given to the AI
-js/extractive.js    offline TextRank summarizer
-js/export.js        PDF, Word, Markdown, HTML and text export
-js/storage.js       settings and history (browser storage)
-vendor/             bundled open-source libraries (see vendor/licenses)
+index.html               page structure
+css/styles.css           design (light + dark themes, mobile layout)
+js/app.js                user interface
+js/summarizer.js         the summarizing engine (TextRank, selection, smoothing, extras)
+js/summarizer-worker.js  runs the engine in the background so the page stays responsive
+js/engine.js             talks to the worker
+js/speech.js             read-aloud player and voice list
+js/extract.js            reading files (PDF, Word, EPUB, PPTX, ODT, RTF, OCR, …)
+js/export.js             PDF, Word, Markdown, HTML and text export
+js/storage.js            settings and history (browser storage)
+vendor/                  bundled open-source libraries (see vendor/licenses)
 ```
 
 ## Credits
 
-Built with [Anthropic's Claude SDK](https://github.com/anthropics/anthropic-sdk-typescript), [PDF.js](https://mozilla.github.io/pdf.js/), [Mammoth](https://github.com/mwilliamson/mammoth.js), [JSZip](https://stuk.github.io/jszip/), [pdfmake](http://pdfmake.org), [docx](https://docx.js.org), [marked](https://marked.js.org), [DOMPurify](https://github.com/cure53/DOMPurify) and [Tesseract.js](https://tesseract.projectnaptha.com) (loaded on demand for OCR). Their licenses are in `vendor/licenses/`.
+Built with [PDF.js](https://mozilla.github.io/pdf.js/), [Mammoth](https://github.com/mwilliamson/mammoth.js), [JSZip](https://stuk.github.io/jszip/), [pdfmake](http://pdfmake.org), [docx](https://docx.js.org), [marked](https://marked.js.org), [DOMPurify](https://github.com/cure53/DOMPurify) and [Tesseract.js](https://tesseract.projectnaptha.com) (loaded on demand for OCR). Their licenses are in `vendor/licenses/`.
 
 Released under the MIT License.

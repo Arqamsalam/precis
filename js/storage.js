@@ -1,23 +1,17 @@
 // Settings and history live only in this browser (localStorage). Nothing is sent anywhere.
 
-const SETTINGS_KEY = 'precis.settings.v1';
-const SESSION_KEYS = 'precis.keys.session';
+const SETTINGS_KEY = 'precis.settings.v2';
 const HISTORY_KEY = 'precis.history.v1';
-const OPTIONS_KEY = 'precis.options.v1';
+const OPTIONS_KEY = 'precis.options.v2';
 const HISTORY_MAX_ITEMS = 40;
 const HISTORY_MAX_CHARS = 3_000_000;
 
 export const DEFAULT_SETTINGS = {
-  provider: 'anthropic', // 'anthropic' | 'openai' | 'offline'
-  rememberKey: true,
-  anthropic: { apiKey: '', model: 'claude-opus-5-5', effort: 'high' },
-  openai: { preset: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '', model: '', contextTokens: 128000, maxOutputTokens: 16000 },
-  advanced: { chunkTokens: 150000, partWords: 3500, autoLength: true },
   ocrLang: 'eng',
 };
 
 export const DEFAULT_OPTIONS = {
-  ratio: 0.25, format: 'preserve', tone: 'match', language: 'same', mature: 'direct', quotes: true, extras: [], custom: '',
+  ratio: 0.25, format: 'paragraphs', focus: '', smooth: true, dedupe: true, trim: false, markGaps: false, extras: [],
 };
 
 function read(store, key) {
@@ -49,25 +43,11 @@ function merge(base, extra) {
 }
 
 export function loadSettings() {
-  const s = merge(DEFAULT_SETTINGS, read(localStorage, SETTINGS_KEY));
-  if (!s.rememberKey) {
-    const keys = read(sessionStorage, SESSION_KEYS) || {};
-    s.anthropic.apiKey = keys.anthropic || '';
-    s.openai.apiKey = keys.openai || '';
-  }
-  return s;
+  return merge(DEFAULT_SETTINGS, read(localStorage, SETTINGS_KEY));
 }
 
 export function saveSettings(s) {
-  const copy = structuredClone(s);
-  if (!s.rememberKey) {
-    write(sessionStorage, SESSION_KEYS, { anthropic: s.anthropic.apiKey, openai: s.openai.apiKey });
-    copy.anthropic.apiKey = '';
-    copy.openai.apiKey = '';
-  } else {
-    try { sessionStorage.removeItem(SESSION_KEYS); } catch { /* ignore */ }
-  }
-  write(localStorage, SETTINGS_KEY, copy);
+  write(localStorage, SETTINGS_KEY, s);
 }
 
 export function loadOptions() {
