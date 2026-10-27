@@ -1,10 +1,12 @@
 // Précis service worker: keeps the app available offline and enables multi-threaded voice/AI processing.
 //
-// Offline: app files are served from a local cache and refreshed in the background (stale-while-revalidate).
+// Offline: the app's own code is always fetched fresh when online (so the page and its scripts never come
+// from different versions) and from the local cache when offline. Bulky third-party libraries are served
+// from the cache and refreshed in the background.
 // Speed: browsers only allow multi-threaded WebAssembly on "cross-origin isolated" pages, which needs two
 // response headers that GitHub Pages can't send. This worker adds them (COOP + COEP: credentialless).
 
-const VERSION = 'precis-2026-10-27c';
+const VERSION = 'precis-2026-10-27d';
 const COEP = new URL(self.location.href).searchParams.get('coep'); // 'credentialless' when the browser supports it
 
 const SHELL = [
@@ -46,26 +48,31 @@ self.addEventListener('fetch', (event) => {
 
 async function sameOrigin(event, req) {
   const cache = await caches.open(VERSION);
-  if (req.mode === 'navigate') {
-    // Fresh page when online, cached page when offline.
-    try {
-      const res = await fetch(req);
-      if (res.ok) event.waitUntil(cache.put('index.html', res.clone()));
-      return isolate(res);
-    } catch {
-      return isolate((await cache.match('index.html')) || (await cache.match('./')) || Response.error());
+  const path = new URL(req.url).pathname;
+  // Libraries and images change rarely: cached copy first, refreshed in the background.
+  if (/\/(vendor|assets)\//.test(path)) {
+    const cached = await cache.match(req, { ignoreSearch: true });
+    const network = fetch(req).then((res) => {
+      if (res.ok && res.status === 200) event.waitUntil(cache.put(req, res.clone()));
+      return res;
+    });
+    if (cached) {
+      network.catch(() => {});
+      return isolate(cached);
     }
+    return isolate(await network);
   }
-  const cached = await cache.match(req, { ignoreSearch: true });
-  const network = fetch(req).then((res) => {
-    if (res.ok && res.status === 200) event.waitUntil(cache.put(req, res.clone()));
-    return res;
-  });
-  if (cached) {
-    network.catch(() => {});
-    return isolate(cached);
+  // The page, scripts and styles: always the latest version when online, the saved copy when offline.
+  try {
+    const res = await fetch(req, { cache: 'no-cache' });
+    if (res.ok && res.status === 200) event.waitUntil(cache.put(req.mode === 'navigate' ? 'index.html' : req, res.clone()));
+    return isolate(res);
+  } catch {
+    const cached = req.mode === 'navigate'
+      ? (await cache.match('index.html')) || (await cache.match('./'))
+      : await cache.match(req, { ignoreSearch: true });
+    return isolate(cached || Response.error());
   }
-  return isolate(await network);
 }
 
 async function cacheFirst(req) {

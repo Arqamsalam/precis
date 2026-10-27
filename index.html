@@ -23,6 +23,21 @@
   try { const t = localStorage.getItem('precis.theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
 </script>
 <script type="module" src="js/app.js"></script>
+<script>
+  // Safety net for updates: if an older saved copy of the app's code was loaded with this newer page,
+  // clear the saved copy and reload once so everything comes from the same version.
+  window.PRECIS_BUILD = '2026-10-27d';
+  addEventListener('load', () => {
+    if (window.PRECIS_BUILD_LOADED === window.PRECIS_BUILD || !('caches' in window)) return;
+    try {
+      if (sessionStorage.getItem('precis.staleReload') === window.PRECIS_BUILD) return;
+      sessionStorage.setItem('precis.staleReload', window.PRECIS_BUILD);
+    } catch { return; }
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('precis-')).map((k) => caches.delete(k))))
+      .then(() => location.reload());
+  });
+</script>
 </head>
 <body>
 <a class="skip" href="#source-text">Skip to the text box</a>

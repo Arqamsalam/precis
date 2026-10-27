@@ -14,6 +14,9 @@ import { ReadAloud, speechSupported, neuralSupported, describeVoice, isEdge, NEU
 import { SAMPLE_TEXT, SAMPLE_TITLE } from './sample.js';
 import { initPwa } from './pwa.js';
 
+// Must match PRECIS_BUILD in index.html (see the update safety net there).
+window.PRECIS_BUILD_LOADED = '2026-10-27d';
+
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -639,21 +642,59 @@ async function copy() {
   const md = currentMarkdown();
   if (!md) return;
   const plain = markdownToPlain(md);
+  const html = renderMarkdown(md);
+  if (await copyModern(html, plain) || copyBySelection(html, plain)) toast('Summary copied');
+  else toast('Copy failed. Select the summary text and press Ctrl+C instead.', 6000);
+}
+
+async function copyModern(html, plain) {
   try {
-    if (!window.ClipboardItem) throw new Error('no rich clipboard');
+    if (!window.ClipboardItem || !navigator.clipboard?.write) throw new Error('no rich clipboard');
     await navigator.clipboard.write([new ClipboardItem({
-      'text/html': new Blob([renderMarkdown(md)], { type: 'text/html' }),
+      'text/html': new Blob([html], { type: 'text/html' }),
       'text/plain': new Blob([plain], { type: 'text/plain' }),
     })]);
+    return true;
   } catch {
     try {
+      if (!navigator.clipboard?.writeText) return false;
       await navigator.clipboard.writeText(plain);
+      return true;
     } catch {
-      toast('Copy failed. Your browser blocked clipboard access.');
-      return;
+      return false;
     }
   }
-  toast('Summary copied');
+}
+
+// Older method that still works where the clipboard API is blocked: select a hidden copy and "copy" it.
+function copyBySelection(html, plain) {
+  const box = document.createElement('div');
+  box.innerHTML = html;
+  box.setAttribute('aria-hidden', 'true');
+  box.style.cssText = 'position:fixed;left:-9999px;top:0;white-space:pre-wrap;';
+  document.body.appendChild(box);
+  const sel = window.getSelection();
+  const saved = sel.rangeCount ? sel.getRangeAt(0) : null;
+  let ok = false;
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(box);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    ok = document.execCommand('copy');
+  } catch { ok = false; }
+  sel.removeAllRanges();
+  if (saved) sel.addRange(saved);
+  box.remove();
+  if (ok) return true;
+  const ta = document.createElement('textarea');
+  ta.value = plain;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+  document.body.appendChild(ta);
+  ta.select();
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  ta.remove();
+  return ok;
 }
 
 async function download(kind) {
