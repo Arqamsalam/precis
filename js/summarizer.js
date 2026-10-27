@@ -538,9 +538,11 @@ export function summarize(A, o) {
 
   const selected = [...chosen].sort((a, b) => a - b);
   const body = format(A, selected, o);
-  const markdown = body + extrasMarkdown(A, score, o);
+  const extras = extrasMarkdown(A, score, o);
   return {
-    markdown,
+    markdown: body + extras,
+    body,
+    extras,
     selected,
     lang: A.lang,
     title: A.docTitle,

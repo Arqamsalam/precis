@@ -10,6 +10,10 @@
 <meta property="og:title" content="Précis — Offline Text Summarizer">
 <meta property="og:description" content="Free and private: summarize any document in your browser, in the author's own words.">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Précis">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
@@ -30,6 +34,9 @@
     <span class="brand-tag">free, private summaries in the author's own words</span>
   </a>
   <nav class="top-actions">
+    <button class="ghost install" id="btn-install" type="button" title="Install Précis as an app on this device (works offline)" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg><span>Install app</span>
+    </button>
     <button class="ghost" id="btn-history" type="button" title="Your past summaries">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3 2"/></svg><span>History</span>
     </button>
@@ -62,22 +69,26 @@
       <div class="ocr-row">
         <label for="ocr-lang">Language of scanned pages &amp; images</label>
         <select id="ocr-lang"></select>
+        <label class="mini-check"><input type="checkbox" id="auto-ocr"> Recognise scanned PDF pages automatically</label>
       </div>
 
       <ul class="file-list" id="file-list" aria-live="polite"></ul>
 
-      <div class="inline-panel" id="pdf-range" hidden>
-        <span>Pages</span>
-        <input type="number" id="page-from" min="1" value="1" aria-label="First page">
-        <span>to</span>
-        <input type="number" id="page-to" min="1" value="1" aria-label="Last page">
-        <span class="muted" id="page-total"></span>
-        <button class="small" id="btn-apply-range" type="button">Apply</button>
-      </div>
-
-      <div class="inline-panel warn" id="ocr-notice" hidden>
-        <span>This PDF looks scanned (pictures of pages, no selectable text).</span>
-        <button class="small" id="btn-run-ocr" type="button">Recognise text (OCR)</button>
+      <div class="inline-panel pdf-tools" id="pdf-tools" hidden>
+        <div class="pdf-row" id="pdf-range-row">
+          <span>Pages</span>
+          <input type="number" id="page-from" min="1" value="1" aria-label="First page">
+          <span>to</span>
+          <input type="number" id="page-to" min="1" value="1" aria-label="Last page">
+          <span class="muted" id="page-total"></span>
+          <button class="small" id="btn-apply-range" type="button">Apply</button>
+        </div>
+        <div class="pdf-row">
+          <span class="pdf-ocr-status" id="pdf-ocr-status"></span>
+          <button class="small" id="btn-ocr-empty" type="button" hidden>Recognise scanned pages</button>
+          <button class="small" id="btn-ocr-all" type="button" title="Use this if the text from the PDF looks garbled or is missing">Read all pages with OCR</button>
+          <button class="small" id="btn-ocr-off" type="button" hidden>Use the PDF's own text</button>
+        </div>
       </div>
 
       <div class="progress-line" id="extract-progress" hidden>
@@ -117,6 +128,21 @@
         </div>
       </div>
 
+      <fieldset class="writer">
+        <legend>Writing</legend>
+        <div class="writer-cards" role="radiogroup" aria-label="How the summary is written">
+          <label class="writer-card"><input type="radio" name="writer" value="extract" checked>
+            <span><b>Author's own sentences</b><small>Instant. The exact original wording, nothing changed.</small></span></label>
+          <label class="writer-card"><input type="radio" name="writer" value="ai">
+            <span><b>AI rewrite on this device</b><small>Smooth, connected prose. Free and private; downloads an AI model once.</small></span></label>
+        </div>
+        <div class="ai-options" id="ai-options" hidden>
+          <label for="ai-model">AI model</label>
+          <select id="ai-model"></select>
+          <small class="hint" id="ai-hint"></small>
+        </div>
+      </fieldset>
+
       <div class="grid2">
         <div class="field">
           <label for="format">Layout</label>
@@ -151,7 +177,7 @@
         <div class="chips" id="extras"></div>
       </fieldset>
 
-      <p class="faithful-note">Only the author's own sentences are used, so nothing is reworded, softened or censored.</p>
+      <p class="faithful-note" id="faithful-note">Only the author's own sentences are used, so nothing is reworded, softened or censored.</p>
 
       <button class="primary big" id="btn-run" type="button">
         <span class="label">Summarize</span>
@@ -194,6 +220,34 @@
           <button class="tool" id="btn-speak" type="button" title="Read the summary aloud" aria-expanded="false" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4.5 3.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/></svg><span>Listen</span>
           </button>
+          <div class="menu">
+            <button class="tool" id="btn-reading" type="button" title="Font, size and spacing of the summary text" aria-haspopup="true" aria-expanded="false">
+              <span class="aa" aria-hidden="true">Aa</span><span>Text</span>
+            </button>
+            <div class="menu-list reading-menu" id="reading-menu" role="dialog" aria-label="Text settings" hidden>
+              <div class="field">
+                <label for="read-font">Font</label>
+                <select id="read-font"></select>
+              </div>
+              <div class="field">
+                <label for="read-size">Size <output id="read-size-out"></output></label>
+                <input type="range" id="read-size" min="13" max="32" step="1">
+              </div>
+              <div class="field">
+                <label for="read-leading">Line spacing <output id="read-leading-out"></output></label>
+                <input type="range" id="read-leading" min="1.2" max="2.4" step="0.05">
+              </div>
+              <div class="field">
+                <label for="read-width">Line width</label>
+                <select id="read-width">
+                  <option value="60ch">Narrow</option>
+                  <option value="72ch">Comfortable</option>
+                  <option value="none">Full width</option>
+                </select>
+              </div>
+              <button class="small" id="read-reset" type="button">Reset to default</button>
+            </div>
+          </div>
           <button class="tool" id="btn-context" type="button" title="Show the chosen sentences highlighted in the full original text" aria-pressed="false" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 10h10M4 14h16M4 18h8"/><path d="M15 9.5h5v1.5h-5z" fill="currentColor"/></svg><span>In context</span>
           </button>
@@ -233,7 +287,23 @@
             <input type="range" id="tts-pitch" min="0.5" max="1.5" step="0.05" value="1">
           </div>
         </div>
-        <p class="hint" id="tts-hint"></p>
+        <div class="tts-status" id="tts-status" hidden>
+          <div class="bar"><span></span></div>
+          <span class="msg"></span>
+        </div>
+        <div class="player-actions">
+          <p class="hint" id="tts-hint"></p>
+          <button class="small" id="tts-save" type="button" title="Turn the whole summary into an audio file you can play anywhere">Save as audio (.wav)</button>
+        </div>
+      </div>
+
+      <div class="status" id="status" hidden>
+        <div class="status-row">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="status-msg" id="status-msg" role="status"></span>
+          <button class="small danger" id="btn-stop" type="button">Stop</button>
+        </div>
+        <div class="bar" id="status-bar"><span></span></div>
       </div>
 
       <div class="notice" id="notice" hidden role="alert"></div>
@@ -295,18 +365,28 @@
     <p>Précis walks through the text in stretches and gives each stretch its fair share of the word budget, so the ending is covered as well as the beginning. The coverage bar under the summary shows where the chosen sentences come from.</p>
     <h3>Reading smoothly</h3>
     <p>A sentence like “He refused.” is meaningless without the one before it, so Précis keeps such pairs together. Stray connectors (“However,”, “Second,”) are dropped when their partner sentence was left out, list fragments are finished with a full stop, and quoted dialogue is never cut in half.</p>
+    <h3>AI rewrite (optional)</h3>
+    <p>Choose <b>AI rewrite on this device</b> and Précis first picks the author's key sentences, then a small AI model running on your graphics card turns them into smooth, connected prose, like an editor polishing a researcher's notes. It is told to keep every detail, including mature content, and to add nothing; any part it refuses or garbles falls back to the author's own sentences. The model downloads once (about 1 GB, or 1.8 GB for the better one) and then works offline. It needs WebGPU, which current Chrome and Edge have on most computers.</p>
     <h3>Listen</h3>
-    <p>Read-aloud uses the voices your browser provides. <b>Microsoft Edge</b> includes Microsoft's free natural voices (Andrew, Ava, Emma, Brian and many more, in dozens of languages, including Urdu). Those voices are streamed by Edge from Microsoft, so Edge sends the text being read to Microsoft. Voices marked “on this device” never leave your computer.</p>
+    <p><b>Natural voices</b> (Heart, Bella, Emma, George and more) are a neural voice model that runs inside Précis. The first time, it downloads once (about 90 MB, or 330 MB for the faster graphics-card version) and then works offline. It speaks English; for other languages, choose one of your browser's voices. <b>Microsoft Edge</b> adds Microsoft's natural voices in many languages, including Urdu, but those are generated online by Microsoft. Use <b>Save as audio</b> to turn the summary into a WAV file you can play anywhere.</p>
+    <h3>Install as an app</h3>
+    <ul>
+      <li><b>Chrome or Edge on a computer:</b> click <b>Install app</b> at the top of this page (or the install icon in the address bar).</li>
+      <li><b>Android:</b> browser menu ⋮ → <b>Install app</b> or <b>Add to Home screen</b>.</li>
+      <li><b>iPhone / iPad:</b> Safari's Share button → <b>Add to Home Screen</b>.</li>
+    </ul>
+    <p>The app keeps working without internet. Voice and AI models you've downloaded stay on your device too.</p>
     <h3>Tips</h3>
     <ul>
       <li>After the first summary, move the slider or change any option and the summary updates instantly.</li>
       <li>Use <b>In context</b> to see the chosen sentences highlighted in the full original.</li>
       <li>Edit the extracted text before summarizing, for example to delete an index or bibliography.</li>
-      <li>For a PDF, choose a page range to summarize one chapter.</li>
+      <li>For a PDF, choose a page range to summarize one chapter. Scanned pages are recognised automatically; if a PDF's text looks garbled, use <b>Read all pages with OCR</b>.</li>
+      <li>Use <b>Aa Text</b> above the summary to change its font, size, spacing and width.</li>
       <li>Press <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to summarize. Every result is saved in <b>History</b> on this device.</li>
     </ul>
     <h3>Privacy</h3>
-    <p>Files are opened and summarized inside your browser; nothing is uploaded. The only downloads are the page itself and, the first time you read a scanned page or image, the text-recognition engine.</p>
+    <p>Files are opened and summarized inside your browser; nothing is uploaded. Things downloaded once and then kept on your device: the app itself, the text-recognition engine (first scanned page), the natural voice model (first time you listen) and the AI model (first AI rewrite). Only Edge's online voices send text anywhere (to Microsoft, to speak it).</p>
   </div>
 </dialog>
 

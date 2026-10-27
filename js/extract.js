@@ -18,6 +18,7 @@ export function loadScript(src) {
     scriptCache.set(src, new Promise((resolve, reject) => {
       const s = document.createElement('script');
       s.src = src;
+      s.crossOrigin = 'anonymous';
       s.async = true;
       s.onload = resolve;
       s.onerror = () => {
@@ -104,16 +105,13 @@ async function decodeText(buffer) {
 
 // ---------- PDF ----------
 
-async function extractPdf(file, opts) {
-  const onProgress = opts.onProgress || (() => {});
+async function openPdf(file, password) {
   const pdfjs = await loadPdfJs();
   const data = new Uint8Array(await file.arrayBuffer());
-  let doc;
-  let password;
   for (;;) {
     try {
-      doc = await pdfjs.getDocument({ data: data.slice(), password, isEvalSupported: false }).promise;
-      break;
+      const doc = await pdfjs.getDocument({ data: data.slice(), password, isEvalSupported: false }).promise;
+      return { doc, password };
     } catch (err) {
       if (err?.name === 'PasswordException') {
         password = window.prompt(err.code === 2 ? 'Wrong password. Try again:' : `"${file.name}" is password-protected. Enter the password:`);
@@ -123,33 +121,41 @@ async function extractPdf(file, opts) {
       throw new Error(`Could not open the PDF: ${err?.message || err}`);
     }
   }
+}
 
-  const total = doc.numPages;
-  const from = Math.min(Math.max(1, opts.pageFrom || 1), total);
-  const to = Math.max(from, Math.min(total, opts.pageTo || total));
-  const pages = [];
-  for (let i = from; i <= to; i++) {
-    onProgress(`Reading page ${i} of ${to}…`, (i - from) / (to - from + 1));
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    pages.push(pageToLines(content.items));
-    page.cleanup();
-  }
-
-  const text = assemblePdfText(pages);
-  const charsPerPage = text.replace(/\s/g, '').length / pages.length;
-  const meta = { kind: 'pdf', pages: total, from, to, scanned: charsPerPage < 25 };
-
-  if (opts.forceOcr || meta.scanned) {
-    if (!opts.forceOcr) {
-      meta.needsOcr = true;
-      return { text, meta, doc };
+/**
+ * Read a PDF's text layer page by page. Pages without text (scanned images) can be recognised with OCR:
+ * opts.ocr = 'empty' recognises only those pages, 'all' recognises every page (for a garbled text layer).
+ */
+async function extractPdf(file, opts) {
+  const onProgress = opts.onProgress || (() => {});
+  const { doc, password } = await openPdf(file, opts.password);
+  try {
+    const total = doc.numPages;
+    const from = Math.min(Math.max(1, opts.pageFrom || 1), total);
+    const to = Math.max(from, Math.min(total, opts.pageTo || total));
+    const pages = [];
+    for (let i = from; i <= to; i++) {
+      onProgress(`Reading page ${i} of ${to}…`, (i - from) / (to - from + 1));
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      const lines = pageToLines(content.items);
+      pages.push({ n: i, lines, chars: lines.reduce((a, l) => a + l.text.replace(/\s/g, '').length, 0) });
+      page.cleanup();
     }
-    const ocrText = await ocrPdfPages(doc, from, to, opts.ocrLang || 'eng', onProgress);
-    return { text: ocrText, meta: { ...meta, ocr: true } };
+    const emptyPages = pages.filter((p) => p.chars < 25).map((p) => p.n);
+    const targets = opts.ocr === 'all' ? pages.map((p) => p.n) : opts.ocr === 'empty' ? emptyPages : [];
+    const recognised = targets.length ? await ocrPdfPages(doc, targets, opts.ocrLang || 'eng', onProgress) : new Map();
+    const text = assemblePdfText(pages.map((p) => (recognised.has(p.n) ? { ocr: recognised.get(p.n) } : { lines: p.lines })));
+    const meta = {
+      kind: 'pdf', pages: total, from, to, password,
+      emptyPages: emptyPages.length, scanned: emptyPages.length === pages.length,
+      ocr: recognised.size ? opts.ocr : null, ocrPages: recognised.size,
+    };
+    return { text, meta };
+  } finally {
+    destroyPdf(doc);
   }
-  destroyPdf(doc);
-  return { text, meta };
 }
 
 export function destroyPdf(doc) {
@@ -188,19 +194,26 @@ function pageToLines(items) {
   return lines.map((l) => ({ ...l, text: l.text.replace(/\s+/g, ' ').trim() })).filter((l) => l.text);
 }
 
+/** @param {Array<{lines?: object[], ocr?: string}>} pages text-layer lines, or recognised text for OCR'd pages */
 function assemblePdfText(pages) {
   // Drop running headers/footers: short lines that repeat on many pages, and bare page numbers.
   const freq = new Map();
-  for (const lines of pages) {
+  const linePages = pages.filter((p) => p.lines).map((p) => p.lines);
+  for (const lines of linePages) {
     const edge = [...lines.slice(0, 2), ...lines.slice(-2)];
     for (const l of new Set(edge.map((l) => l.text.replace(/\d+/g, '#')))) freq.set(l, (freq.get(l) || 0) + 1);
   }
-  const repeated = pages.length >= 4
-    ? new Set([...freq].filter(([t, n]) => n >= pages.length * 0.5 && t.length < 90).map(([t]) => t))
+  const repeated = linePages.length >= 4
+    ? new Set([...freq].filter(([t, n]) => n >= linePages.length * 0.5 && t.length < 90).map(([t]) => t))
     : new Set();
 
   const paragraphs = [];
-  for (const lines of pages) {
+  for (const page of pages) {
+    if (page.ocr != null) {
+      paragraphs.push(...page.ocr.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean));
+      continue;
+    }
+    const lines = page.lines;
     const kept = lines.filter((l, idx) => {
       if (/^[-–—\s]*(page\s*)?\d{1,4}([-–—\s]*|\s*(of|\/)\s*\d+)$/i.test(l.text)) return false;
       const edge = idx < 2 || idx >= lines.length - 2;
@@ -243,32 +256,27 @@ function assemblePdfText(pages) {
   return normalizeWhitespace(merged.join('\n\n'));
 }
 
-export async function ocrPdfDocument(doc, from, to, lang, onProgress) {
-  const text = await ocrPdfPages(doc, from, to, lang, onProgress);
-  destroyPdf(doc);
-  return text;
-}
-
-async function ocrPdfPages(doc, from, to, lang, onProgress) {
+async function ocrPdfPages(doc, pageNumbers, lang, onProgress) {
   const worker = await createOcrWorker(lang, onProgress);
-  const parts = [];
+  const out = new Map();
   try {
-    for (let i = from; i <= to; i++) {
-      onProgress(`OCR: recognising page ${i} of ${to}…`, (i - from) / (to - from + 1));
-      const page = await doc.getPage(i);
+    for (let k = 0; k < pageNumbers.length; k++) {
+      const n = pageNumbers[k];
+      onProgress(`Recognising text: page ${n} (${k + 1} of ${pageNumbers.length})…`, k / pageNumbers.length);
+      const page = await doc.getPage(n);
       const viewport = page.getViewport({ scale: 2 });
       const canvas = document.createElement('canvas');
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
       await page.render({ canvas, canvasContext: canvas.getContext('2d'), viewport }).promise;
       const { data } = await worker.recognize(canvas);
-      parts.push(cleanOcr(data.text));
+      out.set(n, cleanOcr(data.text));
       page.cleanup();
     }
   } finally {
     await worker.terminate();
   }
-  return normalizeWhitespace(parts.join('\n\n'));
+  return out;
 }
 
 // ---------- OCR (images) ----------

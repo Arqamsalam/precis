@@ -8,10 +8,12 @@ const HISTORY_MAX_CHARS = 3_000_000;
 
 export const DEFAULT_SETTINGS = {
   ocrLang: 'eng',
+  autoOcr: true,
 };
 
 export const DEFAULT_OPTIONS = {
   ratio: 0.25, format: 'paragraphs', focus: '', smooth: true, dedupe: true, trim: false, markGaps: false, extras: [],
+  writer: 'extract', aiModel: 'fast',
 };
 
 function read(store, key) {

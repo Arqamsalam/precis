@@ -1,5 +1,5 @@
 // UI controller for Précis (offline edition).
-import { ACCEPT, extractFile, extension, ocrPdfDocument, destroyPdf } from './extract.js';
+import { ACCEPT, extractFile, extension } from './extract.js';
 import { countWords, readingMinutes, formatNumber, baseName, normalizeWhitespace, escapeHtml } from './textutil.js';
 import { runEngine } from './engine.js';
 import {
@@ -10,8 +10,9 @@ import {
   loadSettings, saveSettings, loadOptions, saveOptions, loadHistory, addHistory, updateHistory,
   deleteHistory, clearHistory, getTheme, setTheme,
 } from './storage.js';
-import { ReadAloud, speechSupported, describeVoice, isEdge } from './speech.js';
+import { ReadAloud, speechSupported, neuralSupported, describeVoice, isEdge, NEURAL_VOICES } from './speech.js';
 import { SAMPLE_TEXT, SAMPLE_TITLE } from './sample.js';
+import { initPwa } from './pwa.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -51,7 +52,7 @@ try { sessionStorage.removeItem('precis.keys.session'); } catch { /* ignore */ }
 const state = {
   settings: loadSettings(),
   options: loadOptions(),
-  files: [], // {id, file, name, ext, size, status, text, meta, error, pdfDoc}
+  files: [], // {id, file, name, ext, size, status, text, meta, error, pdfOpts}
   manualText: false,
   busy: false,
   result: null, // {id, markdown, title, pct, srcWords, stats, options, selected, lang, sourceKey}
@@ -62,8 +63,8 @@ const state = {
 const el = {
   fileInput: $('#file-input'), dropzone: $('#dropzone'), fileList: $('#file-list'), ocrLang: $('#ocr-lang'),
   title: $('#doc-title'), source: $('#source-text'), sourceStats: $('#source-stats'),
-  pdfRange: $('#pdf-range'), pageFrom: $('#page-from'), pageTo: $('#page-to'), pageTotal: $('#page-total'),
-  ocrNotice: $('#ocr-notice'), extractProgress: $('#extract-progress'),
+  pdfTools: $('#pdf-tools'), pageFrom: $('#page-from'), pageTo: $('#page-to'), pageTotal: $('#page-total'),
+  autoOcr: $('#auto-ocr'), extractProgress: $('#extract-progress'),
   ratio: $('#ratio'), ratioOut: $('#ratio-out'), targetWords: $('#target-words'), lengthDetail: $('#length-detail'),
   format: $('#format'), formatHint: $('#format-hint'), focus: $('#focus'),
   smooth: $('#opt-smooth'), dedupe: $('#opt-dedupe'), trim: $('#opt-trim'), gaps: $('#opt-gaps'),
@@ -136,6 +137,42 @@ function initOptionsUI() {
     el.extras.appendChild(lab);
   }
   fillSelect(el.ocrLang, OCR_LANGS, state.settings.ocrLang);
+  el.autoOcr.checked = state.settings.autoOcr !== false;
+  fillSelect($('#ai-model'), AI_CHOICES, o.aiModel || 'fast');
+  const writer = o.writer === 'ai' ? 'ai' : 'extract';
+  $(`input[name=writer][value=${writer}]`).checked = true;
+  syncWriterUI();
+}
+
+const AI_CHOICES = [
+  ['fast', 'Fast: Qwen 2.5, 1.5B (about 1 GB download)'],
+  ['best', 'Best writing: Hermes 3, Llama 3.2 3B (about 1.8 GB download)'],
+];
+
+/** WebGPU check without loading the AI library. */
+async function gpuCheck() {
+  if (!('gpu' in navigator)) return { ok: false, reason: 'This browser has no WebGPU, which on-device AI needs. Use the latest Chrome or Edge on a computer.' };
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    return adapter ? { ok: true } : { ok: false, reason: 'No compatible graphics card was found for on-device AI.' };
+  } catch (err) {
+    return { ok: false, reason: `WebGPU is not available: ${err.message}` };
+  }
+}
+
+async function syncWriterUI() {
+  const ai = $('input[name=writer]:checked').value === 'ai';
+  $('#ai-options').hidden = !ai;
+  $('#faithful-note').textContent = ai
+    ? 'The AI only rewrites the key sentences chosen from your text, is told to keep every detail (including mature content) and to add nothing. Where it fails, the author\'s sentences are kept.'
+    : 'Only the author\'s own sentences are used, so nothing is reworded, softened or censored.';
+  if (!ai) return;
+  const hint = $('#ai-hint');
+  const gpu = await gpuCheck();
+  hint.classList.toggle('bad', !gpu.ok);
+  hint.textContent = gpu.ok
+    ? 'Runs on your graphics card. The first rewrite downloads the model once; after that it works offline. Rewriting takes longer than the instant mode.'
+    : gpu.reason;
 }
 
 function readOptions() {
@@ -148,6 +185,8 @@ function readOptions() {
     trim: el.trim.checked,
     markGaps: el.gaps.checked,
     extras: $$('input', el.extras).filter((i) => i.checked).map((i) => i.value),
+    writer: $('input[name=writer]:checked')?.value === 'ai' ? 'ai' : 'extract',
+    aiModel: $('#ai-model').value || 'fast',
   };
   saveOptions(state.options);
   return state.options;
@@ -192,16 +231,30 @@ function renderFileList() {
     li.querySelector('button').addEventListener('click', () => removeFile(f.id));
     el.fileList.appendChild(li);
   }
-  const pdfs = state.files.filter((f) => f.ext === 'pdf' && f.status === 'ready' && f.meta?.pages > 1);
-  const single = pdfs.length === 1 && state.files.length === 1 ? pdfs[0] : null;
-  el.pdfRange.hidden = !single;
-  if (single) {
-    el.pageFrom.max = el.pageTo.max = single.meta.pages;
-    el.pageFrom.value = single.meta.from;
-    el.pageTo.value = single.meta.to;
-    el.pageTotal.textContent = `of ${single.meta.pages}`;
-  }
-  el.ocrNotice.hidden = !state.files.some((f) => f.meta?.needsOcr && f.pdfDoc);
+  renderPdfTools();
+}
+
+// Page range and OCR controls, shown when a single PDF is loaded.
+function renderPdfTools() {
+  const f = state.files.length === 1 && state.files[0].ext === 'pdf' && state.files[0].status === 'ready' ? state.files[0] : null;
+  el.pdfTools.hidden = !f;
+  if (!f) return;
+  const m = f.meta;
+  $('#pdf-range-row').hidden = m.pages < 2;
+  el.pageFrom.max = el.pageTo.max = m.pages;
+  el.pageFrom.value = m.from;
+  el.pageTo.value = m.to;
+  el.pageTotal.textContent = `of ${m.pages}`;
+  const range = m.to - m.from + 1;
+  let status;
+  if (m.ocr === 'all') status = `All ${range} page${range > 1 ? 's' : ''} read with OCR.`;
+  else if (m.ocrPages) status = `${m.ocrPages} scanned page${m.ocrPages > 1 ? 's' : ''} recognised with OCR.`;
+  else if (m.emptyPages) status = `${m.emptyPages} of ${range} page${range > 1 ? 's have' : ' has'} no selectable text (scanned).`;
+  else status = 'Text read from the PDF.';
+  $('#pdf-ocr-status').textContent = status;
+  $('#btn-ocr-empty').hidden = !(m.emptyPages && !m.ocr);
+  $('#btn-ocr-all').hidden = m.ocr === 'all';
+  $('#btn-ocr-off').hidden = !m.ocr;
 }
 
 async function addFiles(fileList) {
@@ -217,19 +270,24 @@ async function addFiles(fileList) {
   setExtractProgress(null);
 }
 
-async function extractEntry(entry, opts) {
+/** @param {{pageFrom?: number, pageTo?: number, ocr?: 'empty'|'all'|null}} opts for PDFs */
+async function extractEntry(entry, opts = {}) {
   entry.status = 'reading';
   renderFileList();
+  entry.pdfOpts = { ocr: state.settings.autoOcr ? 'empty' : null, ...entry.pdfOpts, ...opts };
   try {
-    const { text, meta, doc } = await extractFile(entry.file, {
-      ...opts, ocrLang: state.settings.ocrLang, onProgress: (msg, frac) => setExtractProgress(msg, frac),
+    const { text, meta } = await extractFile(entry.file, {
+      ...entry.pdfOpts, password: entry.meta?.password, ocrLang: state.settings.ocrLang,
+      onProgress: (msg, frac) => setExtractProgress(msg, frac),
     });
     entry.text = normalizeWhitespace(text || '');
     entry.meta = meta;
-    entry.pdfDoc = doc || null;
     entry.status = 'ready';
-    if (!entry.text && !meta?.needsOcr) { entry.status = 'error'; entry.error = 'no text found'; }
-    if (meta?.needsOcr) toast('This PDF has no selectable text. Use "Recognise text (OCR)" to read it.', 5000);
+    if (!entry.text) {
+      entry.status = meta?.emptyPages && !meta.ocr ? 'ready' : 'error';
+      entry.error = 'no text found';
+      if (entry.status === 'ready') toast('This PDF is scanned. Press "Recognise scanned pages" to read it.', 6000);
+    } else if (meta?.ocrPages) toast(`Recognised ${meta.ocrPages} scanned page${meta.ocrPages > 1 ? 's' : ''} with OCR.`);
   } catch (err) {
     console.error(err);
     entry.status = 'error';
@@ -242,15 +300,12 @@ async function extractEntry(entry, opts) {
 
 function removeFile(id) {
   if (state.manualText && !confirm('Removing a file rebuilds the text box and discards your edits. Continue?')) return;
-  const f = state.files.find((x) => x.id === id);
-  destroyPdf(f?.pdfDoc);
   state.files = state.files.filter((x) => x.id !== id);
   renderFileList();
   rebuildSourceFromFiles();
 }
 
 function clearSource() {
-  for (const f of state.files) destroyPdf(f.pdfDoc);
   state.files = [];
   el.source.value = '';
   el.title.value = '';
@@ -286,6 +341,23 @@ function updateLength() {
 
 function setToolsEnabled(on) {
   for (const id of ['#btn-copy', '#btn-download', '#btn-print', '#btn-speak', '#btn-edit', '#btn-context']) $(id).disabled = !on;
+}
+
+// Render streaming text at most once per animation frame, following the end of the text while it grows.
+let renderPending = null;
+function renderOutput(md, { streaming = false } = {}) {
+  const first = !renderPending;
+  renderPending = { md, streaming };
+  if (!first) return;
+  requestAnimationFrame(() => {
+    const { md: text, streaming: live } = renderPending;
+    renderPending = null;
+    const scroller = el.outputScroll;
+    const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
+    el.output.innerHTML = renderMarkdown(text);
+    el.output.classList.toggle('streaming', live);
+    if (live && atBottom) scroller.scrollTop = scroller.scrollHeight;
+  });
 }
 
 function renderEmpty() {
@@ -324,8 +396,8 @@ async function summarize({ live = false } = {}) {
     if (res.title && !el.title.dataset.userSet && el.title.value !== res.title) el.title.value = res.title;
     const docTitle = el.title.value.trim() || 'Untitled';
     const result = {
-      markdown: res.markdown, title: docTitle, pct: Math.round(options.ratio * 100), srcWords: res.stats.words,
-      stats: res.stats, options, selected: res.selected, lang: res.lang, sourceKey: key,
+      markdown: res.markdown, body: res.body, extras: res.extras, title: docTitle, pct: Math.round(options.ratio * 100),
+      srcWords: res.stats.words, stats: res.stats, options, selected: res.selected, lang: res.lang, sourceKey: key,
     };
     const sameDoc = state.result && state.result.sourceKey === key && state.result.id;
     if (sameDoc) {
@@ -336,6 +408,10 @@ async function summarize({ live = false } = {}) {
     }
     showResult(result);
     if (!live && matchMedia('(max-width: 1060px)').matches) $('.output-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (options.writer === 'ai') {
+      if (live) showNotice('Showing the author\'s sentences for the new settings. Press <b>Summarize</b> to rewrite them with AI.');
+      else aiRewrite(result);
+    }
   } catch (err) {
     console.error(err);
     showNotice(`Something went wrong while summarizing: ${escapeHtml(err.message || String(err))}`, 'error');
@@ -351,7 +427,7 @@ async function summarize({ live = false } = {}) {
 function historyEntry(r) {
   return {
     title: r.title, markdown: r.markdown, pct: r.pct, words: r.stats?.summaryWords ?? countWords(r.markdown),
-    srcWords: r.srcWords, engine: 'offline', options: r.options,
+    srcWords: r.srcWords, engine: r.ai ? 'ai' : 'offline', model: r.ai?.model, options: r.options,
   };
 }
 
@@ -362,8 +438,102 @@ function scheduleLive() {
     showNotice('You edited this summary by hand, so it no longer updates automatically. Press <b>Summarize</b> for a fresh one.');
     return;
   }
+  if (aiJob) aiJob.cancelled = true;
   clearTimeout(liveTimer);
   liveTimer = setTimeout(() => summarize({ live: true }), 180);
+}
+
+// ------------------------------------------------------------------ AI rewrite
+
+let aiJob = null;
+
+function setStatus(msg, progress) {
+  const box = $('#status');
+  if (msg == null) { box.hidden = true; return; }
+  box.hidden = false;
+  $('#status-msg').textContent = msg;
+  const bar = $('#status-bar');
+  bar.classList.toggle('indeterminate', progress == null);
+  $('span', bar).style.width = progress == null ? '' : `${Math.max(2, Math.round(progress * 100))}%`;
+}
+
+async function aiRewrite(result) {
+  if (aiJob) aiJob.cancelled = true;
+  const job = { cancelled: false };
+  aiJob = job;
+  reader.stop();
+  setStatus('Starting the on-device AI…', null);
+  try {
+    const gpu = await gpuCheck();
+    if (!gpu.ok) {
+      showNotice(`${escapeHtml(gpu.reason)} Showing the author's own sentences instead.`);
+      return;
+    }
+    const ai = await import('./rewrite.js');
+    const gpuInfo = await ai.webgpuStatus();
+    const modelId = ai.modelIdFor(result.options.aiModel, gpuInfo.f16);
+    const engine = await ai.getEngine(modelId, (r) => {
+      if (job.cancelled) return;
+      const pct = Math.round((r.progress || 0) * 100);
+      const msg = /fetch/i.test(r.text || '') ? `Downloading the AI model (one time only): ${pct}%`
+        : /load|shader|cache/i.test(r.text || '') ? `Loading the AI model into your graphics card: ${pct}%` : 'Preparing the AI model…';
+      setStatus(msg, r.progress || null);
+    });
+    if (job.cancelled) return;
+    el.output.classList.add('streaming');
+    const res = await ai.rewriteSummary({
+      engine,
+      markdown: result.body,
+      onText: (md) => { if (!job.cancelled) renderOutput(md + result.extras, { streaming: true }); },
+      onStatus: (msg, p) => { if (!job.cancelled) setStatus(msg, p ?? null); },
+      isCancelled: () => job.cancelled,
+    });
+    if (job.cancelled || state.result !== result) return;
+    result.extractMarkdown = result.markdown;
+    result.markdown = res.markdown + result.extras;
+    result.ai = { model: modelId, fallbacks: res.fallbacks, chunks: res.chunks };
+    result.stats = { ...result.stats, summaryWords: countWords(res.markdown) };
+    if (result.id) updateHistory(result.id, historyEntry(result));
+    showResult(result);
+    showAiNotice(result);
+  } catch (err) {
+    console.error(err);
+    if (!job.cancelled) {
+      showNotice(`The on-device AI could not run: ${escapeHtml(err.message || String(err))}. Showing the author's own sentences instead.`, 'error');
+      if (state.result === result) showResult(result);
+    }
+  } finally {
+    if (aiJob === job) aiJob = null;
+    setStatus(null);
+    el.output.classList.remove('streaming');
+  }
+}
+
+function showAiNotice(result) {
+  const r = result.ai;
+  if (!r) return;
+  const name = escapeHtml(r.model.split('-q4')[0]);
+  const bits = r.fallbacks && r.fallbacks === r.chunks
+    ? [`${name} declined or couldn't rewrite this text, so the author's own sentences are shown. You can try the other AI model.`]
+    : [`Rewritten on your device by ${name}.`];
+  if (r.fallbacks && r.fallbacks < r.chunks) bits.push(`In ${r.fallbacks} of ${r.chunks} parts the AI's text wasn't usable, so the author's sentences were kept there.`);
+  showNotice(`${bits.join(' ')} <button class="small" type="button" id="btn-toggle-ai">Show the author's original sentences</button>`);
+  $('#btn-toggle-ai').addEventListener('click', (e) => {
+    const showingAi = state.result.markdown !== state.result.extractMarkdown && !state.result.viewingOriginal;
+    state.result.viewingOriginal = showingAi;
+    el.output.innerHTML = renderMarkdown(showingAi ? state.result.extractMarkdown : state.result.markdown);
+    e.target.textContent = showingAi ? 'Show the AI version' : 'Show the author\'s original sentences';
+    if (!el.player.hidden) reader.load(el.output);
+  });
+}
+
+function stopAi() {
+  if (!aiJob) return;
+  aiJob.cancelled = true;
+  import('./rewrite.js').then((ai) => ai.interrupt()).catch(() => {});
+  setStatus(null);
+  if (state.result) showResult(state.result);
+  toast('AI rewrite stopped. Showing the author\'s sentences.');
 }
 
 function showResult(result) {
@@ -460,6 +630,7 @@ function exportMeta() {
 
 function currentMarkdown() {
   if (state.editing) return el.editor.value;
+  if (state.result?.viewingOriginal) return state.result.extractMarkdown;
   return state.result?.markdown || '';
 }
 
@@ -535,26 +706,49 @@ function toggleEdit(force) {
 
 // ------------------------------------------------------------------ read aloud
 
+const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8L7 4Z" fill="currentColor"/></svg>';
+const PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>';
+
+function setVoiceStatus(msg, frac) {
+  const box = $('#tts-status');
+  if (msg == null) { box.hidden = true; return; }
+  box.hidden = false;
+  $('.msg', box).textContent = msg;
+  const bar = $('.bar', box);
+  bar.hidden = frac === false;
+  bar.classList.toggle('indeterminate', frac == null);
+  $('span', bar).style.width = frac == null || frac === false ? '' : `${Math.round(frac * 100)}%`;
+}
+
 const reader = new ReadAloud({
   onState: ({ playing, index, total }) => {
     const play = $('#tts-play');
-    play.innerHTML = playing
-      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>'
-      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8L7 4Z" fill="currentColor"/></svg>';
+    play.innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
     play.title = playing ? 'Pause' : 'Play';
     play.setAttribute('aria-label', play.title);
     $('#tts-pos').textContent = total ? `Paragraph ${Math.max(1, index + 1)} of ${total}` : '';
     $('#btn-speak').classList.toggle('on', playing || !el.player.hidden);
   },
+  onStatus: (s) => {
+    if (saving) return;
+    if (s.kind === 'download') {
+      const mb = (n) => Math.round(n / 1048576);
+      setVoiceStatus(`Downloading the natural voice (one time only): ${mb(s.loaded)} of ${mb(s.total)} MB`, s.loaded / s.total);
+    } else if (s.kind === 'loading') setVoiceStatus('Preparing the natural voice…', null);
+    else if (s.kind === 'buffering') setVoiceStatus('Generating speech… (tip: "Save as audio" makes a gap-free recording on slower computers)', null);
+    else if (s.kind === 'error') setVoiceStatus(`The natural voice could not start: ${s.message}. Choose one of your browser's voices instead.`, false);
+    else setVoiceStatus(null);
+  },
 });
 
 async function openPlayer() {
-  if (!speechSupported()) { toast('Your browser does not support reading aloud.'); return; }
+  if (!speechSupported() && !neuralSupported()) { toast('Your browser does not support reading aloud.'); return; }
   if (!el.player.hidden) { closePlayer(); return; }
   if (state.editing) toggleEdit(false);
   if (state.contextOn) toggleContext(false);
   el.player.hidden = false;
   $('#btn-speak').setAttribute('aria-expanded', 'true');
+  reader.unlockAudio();
   await fillVoices();
   reader.load(el.output);
   reader.play();
@@ -563,34 +757,46 @@ async function openPlayer() {
 function closePlayer() {
   reader.stop();
   el.player.hidden = true;
+  setVoiceStatus(null);
   $('#btn-speak').setAttribute('aria-expanded', 'false');
   $('#btn-speak').classList.remove('on');
 }
+
+const GRADE_STARS = { A: '★★★', B: '★★', C: '★' };
 
 async function fillVoices() {
   const select = $('#tts-voice');
   const voices = await reader.refreshVoices();
   const lang = state.result?.lang || 'en';
   select.innerHTML = '';
-  if (!voices.length) {
-    select.innerHTML = '<option value="">Default voice</option>';
-  } else {
-    for (const [label, list] of reader.voiceOptions(lang)) {
-      const group = document.createElement('optgroup');
-      group.label = label;
-      for (const v of list) {
-        const d = describeVoice(v);
-        const o = document.createElement('option');
-        o.value = v.voiceURI;
-        o.textContent = `${d.natural ? '★ ' : ''}${d.name}${d.region ? ` · ${d.region}` : ''}${d.online ? '' : ' · on this device'}`;
-        group.appendChild(o);
-      }
-      select.appendChild(group);
+  if (neuralSupported()) {
+    const group = document.createElement('optgroup');
+    group.label = lang === 'en' ? 'Natural voices (built in, English)' : 'Natural voices (English only)';
+    for (const v of NEURAL_VOICES) {
+      const o = document.createElement('option');
+      o.value = `k:${v.id}`;
+      const stars = GRADE_STARS[v.grade[0]] || '';
+      o.textContent = `${v.name} · ${v.accent} ${v.gender.toLowerCase()}${stars ? ` ${stars}` : ''}`;
+      group.appendChild(o);
     }
+    select.appendChild(group);
   }
+  for (const [label, list] of reader.browserVoiceGroups(lang)) {
+    const group = document.createElement('optgroup');
+    group.label = `Browser voices: ${label}`;
+    for (const v of list) {
+      const d = describeVoice(v);
+      const o = document.createElement('option');
+      o.value = `b:${v.voiceURI}`;
+      o.textContent = `${d.natural ? '★ ' : ''}${d.name}${d.region ? ` · ${d.region}` : ''}${d.online ? '' : ' · on this device'}`;
+      group.appendChild(o);
+    }
+    select.appendChild(group);
+  }
+  if (!select.options.length) select.innerHTML = '<option value="">Default voice</option>';
   const chosen = reader.pickDefaultVoice(lang);
   if (chosen) select.value = chosen;
-  reader.prefs.voice = select.value;
+  reader.setPrefs({ voice: select.value }, { save: false });
   $('#tts-rate').value = reader.prefs.rate;
   $('#tts-pitch').value = reader.prefs.pitch;
   $('#tts-rate-out').textContent = `${Number(reader.prefs.rate).toFixed(2).replace(/0$/, '')}×`;
@@ -599,17 +805,118 @@ async function fillVoices() {
 }
 
 function updateVoiceHint() {
-  const v = reader.voice;
-  const hasNatural = reader.voices.some((x) => describeVoice(x).natural);
   const hint = [];
-  if (!hasNatural && !isEdge()) {
-    hint.push('Tip: open this page in <b>Microsoft Edge</b> to get Microsoft\'s free natural voices (Andrew, Ava, Emma, Brian and many more, including Urdu).');
-  }
-  if (v && !v.localService) {
-    hint.push('This voice is online: your browser sends the text being read to its voice service. Voices marked “on this device” stay private.');
+  const neural = reader.isNeural;
+  $('#tts-pitch').disabled = neural;
+  $('#tts-pitch').closest('.field').title = neural ? 'Pitch can only be changed for browser voices.' : '';
+  $('#tts-save').hidden = !neural;
+  if (neural) {
+    if (state.result?.lang && state.result.lang !== 'en') hint.push('Natural voices speak English only; for this text choose a browser voice.');
+    else hint.push('Natural voices run on your device. The first time, the voice model downloads once (about 90 MB, or 330 MB for the faster graphics-card version); after that it works offline.');
+  } else {
+    const v = reader.browserVoice;
+    if (!reader.voices.some((x) => describeVoice(x).natural) && !isEdge()) {
+      hint.push('Tip: for Microsoft\'s natural voices in other languages (including Urdu), open this page in <b>Microsoft Edge</b>.');
+    }
+    if (v && !v.localService) hint.push('This voice is online: your browser sends the text being read to its voice service.');
   }
   $('#tts-hint').innerHTML = hint.join(' ');
   $('#tts-hint').hidden = !hint.length;
+}
+
+let saving = null;
+async function saveAudio() {
+  const btn = $('#tts-save');
+  if (saving) { saving.cancelled = true; return; }
+  reader.pause();
+  if (!reader.blocks.length) reader.load(el.output);
+  saving = { cancelled: false };
+  const job = saving;
+  btn.textContent = 'Cancel saving';
+  try {
+    const blob = await reader.exportWav(
+      (done, total) => setVoiceStatus(`Creating audio: sentence ${Math.min(done + 1, total)} of ${total}…`, done / total),
+      () => job.cancelled,
+    );
+    if (blob) {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${exportMeta().stem}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      toast('Audio saved.');
+    }
+  } catch (err) {
+    toast(`Could not create the audio: ${err.message}`, 6000);
+  } finally {
+    saving = null;
+    btn.textContent = 'Save as audio (.wav)';
+    setVoiceStatus(null);
+  }
+}
+
+// ------------------------------------------------------------------ reading settings
+
+const READ_KEY = 'precis.reading.v1';
+const READ_FONTS = [
+  ['serif', 'Source Serif (book)', '"Source Serif 4", Georgia, serif', null],
+  ['georgia', 'Georgia (classic)', 'Georgia, "Times New Roman", serif', null],
+  ['sans', 'Inter (clean)', 'Inter, system-ui, sans-serif', null],
+  ['atkinson', 'Atkinson Hyperlegible (easy to read)', '"Atkinson Hyperlegible", system-ui, sans-serif', 'Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400'],
+  ['lexend', 'Lexend (relaxed reading)', 'Lexend, system-ui, sans-serif', 'Lexend:wght@400;600'],
+  ['literata', 'Literata (e-book)', 'Literata, Georgia, serif', 'Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400'],
+  ['nastaliq', 'Noto Nastaliq (Urdu)', '"Noto Nastaliq Urdu", "Source Serif 4", serif', 'Noto+Nastaliq+Urdu:wght@400;700'],
+  ['naskh', 'Noto Naskh (Arabic)', '"Noto Naskh Arabic", "Source Serif 4", serif', 'Noto+Naskh+Arabic:wght@400;700'],
+  ['system', 'System default', 'system-ui, sans-serif', null],
+  ['mono', 'Monospace', 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', null],
+];
+const READ_DEFAULTS = { font: 'serif', size: 17.5, leading: 1.72, width: '72ch' };
+
+function loadReading() {
+  try { return { ...READ_DEFAULTS, ...JSON.parse(localStorage.getItem(READ_KEY)) }; } catch { return { ...READ_DEFAULTS }; }
+}
+
+function applyReading(r) {
+  const font = READ_FONTS.find((f) => f[0] === r.font) || READ_FONTS[0];
+  if (font[3] && !document.querySelector(`link[data-font="${font[0]}"]`)) {
+    // Extra fonts are fetched only when chosen.
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${font[3]}&display=swap`;
+    link.dataset.font = font[0];
+    document.head.appendChild(link);
+  }
+  const root = document.documentElement.style;
+  root.setProperty('--read-font', font[2]);
+  root.setProperty('--read-size', `${r.size}px`);
+  root.setProperty('--read-leading', String(r.leading));
+  root.setProperty('--read-width', r.width);
+  $('#read-font').value = font[0];
+  $('#read-size').value = r.size;
+  $('#read-size-out').textContent = `${Math.round(r.size)} px`;
+  $('#read-leading').value = r.leading;
+  $('#read-leading-out').textContent = Number(r.leading).toFixed(2);
+  $('#read-width').value = r.width;
+}
+
+function initReading() {
+  fillSelect($('#read-font'), READ_FONTS.map(([k, label]) => [k, label]));
+  let r = loadReading();
+  applyReading(r);
+  const update = (patch) => {
+    r = { ...r, ...patch };
+    applyReading(r);
+    try { localStorage.setItem(READ_KEY, JSON.stringify(r)); } catch { /* private mode */ }
+  };
+  $('#read-font').addEventListener('change', (e) => update({ font: e.target.value }));
+  $('#read-size').addEventListener('input', (e) => update({ size: Number(e.target.value) }));
+  $('#read-leading').addEventListener('input', (e) => update({ leading: Number(e.target.value) }));
+  $('#read-width').addEventListener('change', (e) => update({ width: e.target.value }));
+  $('#read-reset').addEventListener('click', () => update({ ...READ_DEFAULTS }));
+  // Clicks inside the panel shouldn't close it.
+  $('#reading-menu').addEventListener('click', (e) => e.stopPropagation());
 }
 
 // ------------------------------------------------------------------ menus
@@ -624,14 +931,15 @@ function setupMenus() {
       closeMenus();
       list.hidden = !open;
       btn.setAttribute('aria-expanded', String(open));
-      if (open) $('button', list)?.focus();
+      if (open) $('select, input, button', list)?.focus();
     });
     list.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { closeMenus(); btn.focus(); return; }
+      if (list.classList.contains('reading-menu')) return;
       const items = $$('button', list);
       const i = items.indexOf(document.activeElement);
       if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
       if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
-      if (e.key === 'Escape') { closeMenus(); btn.focus(); }
     });
   }
   document.addEventListener('click', closeMenus);
@@ -753,33 +1061,31 @@ function bind() {
     clearSource();
   });
 
-  $('#btn-apply-range').addEventListener('click', async () => {
-    const f = state.files.find((x) => x.ext === 'pdf');
+  const pdfEntry = () => (state.files.length === 1 && state.files[0].ext === 'pdf' ? state.files[0] : null);
+  const reread = async (opts) => {
+    const f = pdfEntry();
     if (!f) return;
-    const from = Number(el.pageFrom.value) || 1;
-    const to = Number(el.pageTo.value) || f.meta.pages;
-    if (from > to) { toast('The first page must come before the last page.'); return; }
-    await extractEntry(f, { pageFrom: from, pageTo: to });
-    setExtractProgress(null);
-  });
-  $('#btn-run-ocr').addEventListener('click', async () => {
-    const f = state.files.find((x) => x.meta?.needsOcr && x.pdfDoc);
-    if (!f) return;
-    $('#btn-run-ocr').disabled = true;
+    for (const b of $$('button', el.pdfTools)) b.disabled = true;
     try {
-      const text = await ocrPdfDocument(f.pdfDoc, f.meta.from, f.meta.to, el.ocrLang.value, (m, p) => setExtractProgress(m, p));
-      f.text = normalizeWhitespace(text);
-      f.meta = { ...f.meta, needsOcr: false, ocr: true };
-      f.pdfDoc = null;
-      if (!f.text) toast('No text could be recognised on these pages.');
-    } catch (err) {
-      toast(`OCR failed: ${err.message || err}`, 6000);
+      await extractEntry(f, opts);
     } finally {
-      $('#btn-run-ocr').disabled = false;
+      for (const b of $$('button', el.pdfTools)) b.disabled = false;
       setExtractProgress(null);
-      renderFileList();
-      rebuildSourceFromFiles();
     }
+  };
+  $('#btn-apply-range').addEventListener('click', () => {
+    const f = pdfEntry();
+    const from = Number(el.pageFrom.value) || 1;
+    const to = Number(el.pageTo.value) || f?.meta.pages;
+    if (from > to) { toast('The first page must come before the last page.'); return; }
+    reread({ pageFrom: from, pageTo: to });
+  });
+  $('#btn-ocr-empty').addEventListener('click', () => reread({ ocr: 'empty' }));
+  $('#btn-ocr-all').addEventListener('click', () => reread({ ocr: 'all' }));
+  $('#btn-ocr-off').addEventListener('click', () => reread({ ocr: null }));
+  el.autoOcr.addEventListener('change', () => {
+    state.settings.autoOcr = el.autoOcr.checked;
+    saveSettings(state.settings);
   });
 
   // Options: once a summary exists for this text, every change updates it live.
@@ -800,6 +1106,9 @@ function bind() {
   $('#options-card').addEventListener('change', readOptions);
 
   el.run.addEventListener('click', () => summarize());
+  $('#btn-stop').addEventListener('click', stopAi);
+  $$('input[name=writer]').forEach((r) => r.addEventListener('change', () => { syncWriterUI(); readOptions(); }));
+  $('#ai-model').addEventListener('change', readOptions);
   $('#btn-print').addEventListener('click', () => { const md = currentMarkdown(); if (md) printAsPdf(md, exportMeta()); });
   $('#btn-edit').addEventListener('click', () => toggleEdit());
   $('#btn-context').addEventListener('click', () => toggleContext());
@@ -822,10 +1131,10 @@ function bind() {
   });
   $('#tts-pitch').addEventListener('change', (e) => reader.setPrefs({ pitch: Number(e.target.value) }));
   $('#tts-preview').addEventListener('click', () => {
-    const v = reader.voice;
-    const code = (v?.lang || 'en').slice(0, 2);
+    const code = reader.isNeural ? 'en' : (reader.browserVoice?.lang || 'en').slice(0, 2);
     reader.preview(PREVIEW_TEXT[code] || PREVIEW_TEXT.en);
   });
+  $('#tts-save').addEventListener('click', saveAudio);
   if (speechSupported()) speechSynthesis.addEventListener?.('voiceschanged', () => { if (!el.player.hidden) fillVoices(); });
 
   // History & help
@@ -847,10 +1156,25 @@ function bind() {
 // ------------------------------------------------------------------ start
 
 initOptionsUI();
+initReading();
 initTheme();
 bind();
 updateSourceStats();
 renderEmpty();
+initPwa({
+  onInstallable: (yes, install) => {
+    const btn = $('#btn-install');
+    btn.hidden = !yes;
+    btn.onclick = install || null;
+  },
+});
+// Files opened with the installed app ("Open with Précis") arrive here.
+if ('launchQueue' in window) {
+  window.launchQueue.setConsumer(async (params) => {
+    if (!params.files?.length) return;
+    addFiles(await Promise.all(params.files.map((h) => h.getFile())));
+  });
+}
 const repo = $('#repo-link');
 if (location.hostname.endsWith('github.io')) {
   const user = location.hostname.split('.')[0];

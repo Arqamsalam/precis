@@ -1,10 +1,14 @@
-# Précis: free, private, offline summarizer
+# Précis: free, private text summarizer
 
-**Précis** (say *“pray-see”*) shortens long documents to exactly the length you choose, **entirely inside your browser**. No account, no API key, no cost, and your text never leaves your device.
+**Précis** (say *“pray-see”*) shortens long documents to exactly the length you choose, **inside your browser**. No account, no API key, no cost. Your text never leaves your device.
 
-Think of a careful reader with a highlighter and a pair of scissors: they read every sentence, work out which ones carry the story or argument, and cut away the rest, keeping **the author's own words**. Nothing is reworded, softened or censored.
+It works in two steps, like a research team:
+
+1. **The researcher** (always on, instant): reads every sentence and picks the ones that carry the story or argument, keeping the **author's own words**, with fair coverage from start to finish.
+2. **The editor** (optional): a small AI model running on your own graphics card rewrites those key sentences into smooth, connected prose, keeping every detail and adding nothing.
 
 🌐 **Use it:** https://arqamsalam.github.io/precis/
+📲 **Install it:** open the site and press **Install app** (Chrome/Edge), or *Add to Home Screen* on phones. It then works offline.
 
 ---
 
@@ -12,67 +16,60 @@ Think of a careful reader with a highlighter and a pair of scissors: they read e
 
 | | |
 |---|---|
-| 📄 **Reads almost any file** | PDF (with page ranges), Word `.docx`, EPUB e-books, PowerPoint `.pptx`, OpenDocument `.odt`, RTF, HTML, Markdown/TXT, CSV/JSON, subtitles `.srt`/`.vtt`, and **images or scanned PDFs** via text recognition (OCR) in 24 languages. Drag and drop, browse, or paste. |
-| 🎚️ **Any length** | A slider from 1% to 90%, presets, or an exact word count. Results land within about 1% of the target. |
-| ⚡ **Instant, live updates** | After the first summary, move the slider or change an option and the summary updates immediately. A whole novel takes about a second. |
-| 🧵 **Reads smoothly** | Keeps a sentence together with the one it depends on, drops stray connectors (“However,”, “Second,”) when their partner was cut, finishes list fragments properly, never splits quoted dialogue, and skips near-duplicate sentences. Optional: trim (asides) and citations, mark cuts with […]. |
-| ⚖️ **Balanced coverage** | Every part of the text gets its fair share, so the ending is covered as well as the beginning. A coverage bar shows where the chosen sentences come from. |
-| 🎯 **Focus** | Type words or names to prioritise (e.g. “budget, Elias”). |
-| 🔍 **In context** | See the chosen sentences highlighted inside the full original. |
-| 🧾 **Layouts and extras** | Flowing paragraphs, bullet points, or section by section. Add key takeaways, keywords, names mentioned, notable quotes (with speakers), key figures and a timeline. |
-| 🔊 **Listen** | Read aloud with a choice of voices, speed and pitch; the current paragraph is highlighted. In **Microsoft Edge** this includes Microsoft's free natural voices (Andrew, Ava, Emma, Brian and many more, including Urdu). |
-| 💾 **Exports** | PDF, Word `.docx`, Markdown, HTML web page, plain text; copy as formatted text; print. |
-| 🗂️ **History, themes, mobile** | Past summaries saved in your browser, light/dark theme, works on phones. |
+| 📄 **Reads almost any file** | PDF (with page ranges), Word `.docx`, EPUB, PowerPoint `.pptx`, OpenDocument `.odt`, RTF, HTML, Markdown/TXT, CSV/JSON, subtitles, and images. |
+| 🔍 **OCR for scanned PDFs** | Pages without text are recognised automatically (24 languages, including Urdu and Arabic). **Read all pages with OCR** fixes PDFs whose built-in text is garbled. |
+| 🎚️ **Any length** | 1% to 90%, presets, or an exact word count, accurate to about 1%. Updates instantly as you move the slider. |
+| 🧵 **Reads smoothly** | Keeps dependent sentences together, drops stray connectors, finishes list fragments, never splits dialogue, skips repetition. |
+| ✍️ **AI rewrite on your device** | Optional smooth prose from Qwen 2.5 (1.5B, ~1 GB) or Hermes 3 (Llama 3.2 3B, ~1.8 GB) via WebLLM on your graphics card. Told never to soften or censor; refusals fall back to the author's sentences. |
+| 🔊 **Natural voices** | Built-in neural voices (Kokoro: Heart, Bella, Emma, George…) that run offline after a one-time download, plus your browser's voices (Microsoft's natural voices in Edge). Speed, pitch, paragraph skipping, highlighting, and **Save as audio (.wav)**. |
+| 🅰️ **Reading comfort** | Choose the font (including easy-to-read Atkinson Hyperlegible and Lexend, and Urdu Nastaliq), size, line spacing and width. Light/dark theme. |
+| 🎯 **Focus, layouts, extras** | Prioritise words or names; paragraphs, bullets or section by section; key takeaways, keywords, names, quotes, key figures, timeline; *In context* view highlighting the chosen sentences in the original. |
+| 💾 **Exports** | PDF, Word, Markdown, HTML, plain text, audio; copy; print; history. |
+| 📴 **Works offline** | Installable app (PWA). Everything except the first downloads works without internet. |
 
-## How it chooses sentences
+## What gets downloaded, and when
 
-1. **Centrality (TextRank).** Every sentence “votes” for the sentences it shares important words with, much like web pages linking to each other. The sentences that many others point to are the backbone of the text.
-2. **Key terms.** Words that are frequent in this text but rare overall (names, topics) make a sentence more valuable, both for the whole document and within its own chapter.
-3. **Position and signals.** Opening sentences of paragraphs and phrases such as “in conclusion” or “the main reason” get a boost; examples (“for instance…”) get less.
-4. **Fair shares.** The text is walked through in stretches, and each stretch spends its share of the word budget on its best sentences, skipping repeats and keeping dependent pairs together.
-5. **Polish.** Connectors and list endings are tidied, paragraphs are rebuilt, and chapter headings are kept.
+Nothing needs to be downloaded by hand. The first time you use a feature, the browser fetches what it needs once and keeps it:
 
-Because it only selects sentences, the summary can't misquote the author, add anything, or leave out sensitive material because of what it says. The trade-off: it can't rephrase. Very short summaries of novels (under ~5%) can feel like a sequence of key moments rather than a retelling.
+| When | What | Size | From |
+|---|---|---|---|
+| Opening the site | The app | ~5 MB | GitHub Pages |
+| First scanned page or image | Text-recognition engine (Tesseract) + language data | ~5–15 MB | jsDelivr |
+| First time you listen with a natural voice | Voice engine + Kokoro voice model | ~24 MB + ~90 MB (330 MB on graphics cards) | GitHub Pages + Hugging Face |
+| First AI rewrite | AI engine + language model | ~12 MB + ~1 GB (or ~1.8 GB) | GitHub + Hugging Face |
 
-## Listening with natural voices
+## Requirements
 
-Précis uses the voices built into your browser:
-
-- **Microsoft Edge** (Windows, Mac, Android, iOS) offers Microsoft's free natural voices such as *Andrew*, *Ava*, *Emma*, *Brian* and *Jenny*, plus natural voices in dozens of other languages, including Urdu (*Uzma*, *Asad*). They appear first in the voice list, marked with ★.
-- **Chrome** offers Google voices; **Safari** offers Apple voices (you can download better “Enhanced”/“Premium” ones in your system's settings).
-
-Online voices (like Edge's natural voices) are spoken by the browser maker's service, so the browser sends the text being read to that service. Voices marked “on this device” are fully private.
+- Any modern browser for summarizing, OCR, exports and natural voices.
+- **AI rewrite** needs WebGPU: current **Chrome** or **Edge** on most Windows/Mac computers (and some Android phones), with about 2–4 GB of free graphics memory.
+- Natural voices are fastest on a graphics card; on older computers, use **Save as audio** for gap-free playback.
 
 ## Privacy
 
-- Files are opened and summarized inside your browser. This site has no server and stores nothing.
+- Files are opened, summarized, rewritten and read aloud **on your device**. This site has no server and stores nothing.
 - History and settings are kept in your browser's local storage.
-- The only things downloaded are the page itself and, the first time you read a scanned page or image, the open-source text-recognition engine.
+- The only exception is if you pick one of Edge's online voices: Edge sends the text being read to Microsoft to speak it.
 
 ## Running it yourself
 
-The site is plain HTML, CSS and JavaScript with no build step. To run it on your own computer: `python3 -m http.server` in this folder, then open <http://localhost:8000>.
-
-To publish your own copy on GitHub Pages: **Settings → Pages → Deploy from a branch → `main` / root**.
+Plain HTML, CSS and JavaScript, no build step: run `python3 -m http.server` in this folder and open <http://localhost:8000>. To publish your own copy: **Settings → Pages → Deploy from a branch → `main` / root**.
 
 ## Project layout
 
 ```
-index.html               page structure
-css/styles.css           design (light + dark themes, mobile layout)
-js/app.js                user interface
-js/summarizer.js         the summarizing engine (TextRank, selection, smoothing, extras)
-js/summarizer-worker.js  runs the engine in the background so the page stays responsive
-js/engine.js             talks to the worker
-js/speech.js             read-aloud player and voice list
-js/extract.js            reading files (PDF, Word, EPUB, PPTX, ODT, RTF, OCR, …)
-js/export.js             PDF, Word, Markdown, HTML and text export
-js/storage.js            settings and history (browser storage)
-vendor/                  bundled open-source libraries (see vendor/licenses)
+index.html, css/styles.css   page and design
+sw.js, manifest.webmanifest  installable app, offline cache, multi-core speed-up
+js/app.js                    user interface
+js/summarizer.js (+ worker)  the summarizing engine
+js/rewrite.js, llm-worker.js on-device AI rewrite (WebLLM)
+js/speech.js, tts-worker.js  read-aloud player and natural voices (Kokoro)
+js/extract.js                reading files and OCR
+js/export.js                 PDF, Word, Markdown, HTML, text export
+vendor/                      bundled open-source libraries (licenses in vendor/licenses)
 ```
 
-## Credits
+## Credits and licenses
 
-Built with [PDF.js](https://mozilla.github.io/pdf.js/), [Mammoth](https://github.com/mwilliamson/mammoth.js), [JSZip](https://stuk.github.io/jszip/), [pdfmake](http://pdfmake.org), [docx](https://docx.js.org), [marked](https://marked.js.org), [DOMPurify](https://github.com/cure53/DOMPurify) and [Tesseract.js](https://tesseract.projectnaptha.com) (loaded on demand for OCR). Their licenses are in `vendor/licenses/`.
+Built with [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) via [kokoro-js](https://www.npmjs.com/package/kokoro-js) and [Transformers.js](https://github.com/huggingface/transformers.js), [WebLLM](https://github.com/mlc-ai/web-llm), [ONNX Runtime Web](https://onnxruntime.ai), [PDF.js](https://mozilla.github.io/pdf.js/), [Tesseract.js](https://tesseract.projectnaptha.com), [Mammoth](https://github.com/mwilliamson/mammoth.js), [JSZip](https://stuk.github.io/jszip/), [pdfmake](http://pdfmake.org), [docx](https://docx.js.org), [marked](https://marked.js.org) and [DOMPurify](https://github.com/cure53/DOMPurify). Licenses are in `vendor/licenses/`. Note: `vendor/kokoro.mjs` includes [eSpeak NG](https://github.com/espeak-ng/espeak-ng), which is GPL-3.0 licensed. The AI models have their own licenses (Qwen 2.5: Apache 2.0; Hermes 3 / Llama 3.2: Llama 3.2 Community License; Kokoro: Apache 2.0).
 
-Released under the MIT License.
+Précis's own code is released under the MIT License.
