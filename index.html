@@ -114,13 +114,14 @@
           <label for="ratio">Summary length</label>
           <output id="ratio-out" for="ratio">25%</output>
         </div>
-        <input type="range" id="ratio" min="1" max="90" step="1" value="25" aria-describedby="length-info">
+        <input type="range" id="ratio" min="1" max="95" step="1" value="25" aria-describedby="length-info">
         <div class="presets" role="group" aria-label="Length presets">
           <button type="button" data-ratio="5">5% <small>gist</small></button>
           <button type="button" data-ratio="10">10% <small>brief</small></button>
           <button type="button" data-ratio="25">25% <small>standard</small></button>
           <button type="button" data-ratio="50">50% <small>detailed</small></button>
           <button type="button" data-ratio="75">75% <small>light trim</small></button>
+          <button type="button" data-ratio="95">95% <small>near full</small></button>
         </div>
         <div class="length-info" id="length-info">
           About <input type="number" id="target-words" min="10" step="10" aria-label="Target word count"> words
@@ -192,16 +193,9 @@
       <div class="card-head output-head">
         <h2><span class="step">3</span> Summary</h2>
         <div class="toolbar" id="toolbar">
-          <div class="menu">
-            <button class="tool" id="btn-copy" type="button" aria-haspopup="true" aria-expanded="false" disabled>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><span>Copy</span>
-            </button>
-            <div class="menu-list" role="menu" hidden>
-              <button role="menuitem" data-copy="rich" type="button">Formatted text <small>for Word, Docs, email</small></button>
-              <button role="menuitem" data-copy="md" type="button">Markdown</button>
-              <button role="menuitem" data-copy="plain" type="button">Plain text</button>
-            </div>
-          </div>
+          <button class="tool" id="btn-copy" type="button" title="Copy the whole summary (keeps headings and bold when pasted into Word, Docs or email)" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/></svg><span>Copy</span>
+          </button>
           <div class="menu">
             <button class="tool accent" id="btn-download" type="button" aria-haspopup="true" aria-expanded="false" disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></svg><span>Download</span>

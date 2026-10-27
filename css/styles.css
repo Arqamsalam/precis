@@ -214,7 +214,7 @@ select { appearance: none; padding-right: 32px; background-image: url("data:imag
 input[type=range] {
   width: 100%; margin: 12px 0 8px; accent-color: var(--accent); height: 24px; cursor: pointer;
 }
-.presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.presets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .presets button {
   background: var(--card); border: 1px solid var(--rule-2); border-radius: 8px; padding: 6px 2px;
   font-weight: 600; font-size: 13px; display: flex; flex-direction: column; align-items: center; line-height: 1.2;
@@ -461,7 +461,7 @@ dialog::backdrop { background: rgba(15, 10, 5, .45); backdrop-filter: blur(2px);
   .output-scroll { margin: 0 -14px; padding: 4px 14px 8px; }
   .grid2 { grid-template-columns: 1fr; }
   .writer-cards { grid-template-columns: 1fr; }
-  .presets { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .presets { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
   .presets button small { display: none; }
   .tool span { display: none; }
   .player-grid { grid-template-columns: 1fr 1fr; }

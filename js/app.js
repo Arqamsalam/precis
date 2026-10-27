@@ -634,22 +634,26 @@ function currentMarkdown() {
   return state.result?.markdown || '';
 }
 
-async function copy(kind) {
+/** Copy the whole summary: formatted for Word/Docs/email, with plain text for everything else. */
+async function copy() {
   const md = currentMarkdown();
   if (!md) return;
+  const plain = markdownToPlain(md);
   try {
-    if (kind === 'rich' && window.ClipboardItem) {
-      await navigator.clipboard.write([new ClipboardItem({
-        'text/html': new Blob([renderMarkdown(md)], { type: 'text/html' }),
-        'text/plain': new Blob([markdownToPlain(md)], { type: 'text/plain' }),
-      })]);
-    } else {
-      await navigator.clipboard.writeText(kind === 'md' ? md : markdownToPlain(md));
-    }
-    toast('Copied to clipboard');
+    if (!window.ClipboardItem) throw new Error('no rich clipboard');
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([renderMarkdown(md)], { type: 'text/html' }),
+      'text/plain': new Blob([plain], { type: 'text/plain' }),
+    })]);
   } catch {
-    toast('Copy failed. Your browser blocked clipboard access.');
+    try {
+      await navigator.clipboard.writeText(plain);
+    } catch {
+      toast('Copy failed. Your browser blocked clipboard access.');
+      return;
+    }
   }
+  toast('Summary copied');
 }
 
 async function download(kind) {
@@ -943,7 +947,6 @@ function setupMenus() {
     });
   }
   document.addEventListener('click', closeMenus);
-  $$('[data-copy]').forEach((b) => b.addEventListener('click', () => { closeMenus(); copy(b.dataset.copy); }));
   $$('[data-dl]').forEach((b) => b.addEventListener('click', () => { closeMenus(); download(b.dataset.dl); }));
 }
 
@@ -1095,7 +1098,7 @@ function bind() {
     const words = countWords(el.source.value);
     const target = Number(el.targetWords.value);
     if (!words || !target) return;
-    el.ratio.value = Math.min(90, Math.max(1, Math.round((target / words) * 100)));
+    el.ratio.value = Math.min(95, Math.max(1, Math.round((target / words) * 100)));
     updateLength();
     scheduleLive();
   });
@@ -1109,6 +1112,7 @@ function bind() {
   $('#btn-stop').addEventListener('click', stopAi);
   $$('input[name=writer]').forEach((r) => r.addEventListener('change', () => { syncWriterUI(); readOptions(); }));
   $('#ai-model').addEventListener('change', readOptions);
+  $('#btn-copy').addEventListener('click', copy);
   $('#btn-print').addEventListener('click', () => { const md = currentMarkdown(); if (md) printAsPdf(md, exportMeta()); });
   $('#btn-edit').addEventListener('click', () => toggleEdit());
   $('#btn-context').addEventListener('click', () => toggleContext());

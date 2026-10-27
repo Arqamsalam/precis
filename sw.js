@@ -4,7 +4,7 @@
 // Speed: browsers only allow multi-threaded WebAssembly on "cross-origin isolated" pages, which needs two
 // response headers that GitHub Pages can't send. This worker adds them (COOP + COEP: credentialless).
 
-const VERSION = 'precis-2026-10-27b';
+const VERSION = 'precis-2026-10-27c';
 const COEP = new URL(self.location.href).searchParams.get('coep'); // 'credentialless' when the browser supports it
 
 const SHELL = [

@@ -501,7 +501,8 @@ export function summarize(A, o) {
     const pool = new Set(win);
     for (;;) {
       const remaining = budget - used;
-      const tolerance = Math.max(6, budget * 0.15);
+      // Room to overshoot a little, but never more than half of what this window is meant to leave out.
+      const tolerance = Math.max(4, Math.min(budget * 0.15, (winWords - budget) * 0.5));
       let best = null;
       for (const i of pool) {
         if (chosen.has(i)) continue;
